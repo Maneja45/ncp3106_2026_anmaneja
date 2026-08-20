@@ -624,7 +624,9 @@ footer{
 }
 
 
+/* ========================= */
 /* SLIDESHOW */
+/* ========================= */
 
 .slideshow{
     position:relative;
@@ -642,52 +644,69 @@ footer{
     object-fit:cover;
     border-radius:18px;
     opacity:0;
-    animation:slideShow 9s infinite;
 }
 
-/* First picture */
-.slideshow img:nth-child(1){
-    animation-delay:0s;
-}
-
-/* Second picture */
-.slideshow img:nth-child(2){
-    animation-delay:3s;
-}
-
-/* Third picture */
-.slideshow img:nth-child(3){
-    animation-delay:6s;
-
-
+/* ========================= */
 /* LOVE - 4 PICTURES */
+/* ========================= */
 
-.love-slideshow img:nth-child(1){
+.love-box .slideshow img{
     animation:loveSlideShow 12s infinite;
+}
+
+.love-box .slideshow img:nth-child(1){
     animation-delay:0s;
 }
 
-.love-slideshow img:nth-child(2){
-    animation:loveSlideShow 12s infinite;
+.love-box .slideshow img:nth-child(2){
     animation-delay:3s;
 }
 
-.love-slideshow img:nth-child(3){
-    animation:loveSlideShow 12s infinite;
+.love-box .slideshow img:nth-child(3){
     animation-delay:6s;
 }
 
-.love-slideshow img:nth-child(4){
-    animation:loveSlideShow 12s infinite;
+.love-box .slideshow img:nth-child(4){
     animation-delay:9s;
 }
 
+
+/* ========================= */
+/* WORKS + HOBBIES - 3 PICTURES */
+/* ========================= */
+
+.works-box .slideshow img,
+.hobbies-box .slideshow img{
+    animation:slideShow 9s infinite;
+}
+
+.works-box .slideshow img:nth-child(1),
+.hobbies-box .slideshow img:nth-child(1){
+    animation-delay:0s;
+}
+
+.works-box .slideshow img:nth-child(2),
+.hobbies-box .slideshow img:nth-child(2){
+    animation-delay:3s;
+}
+
+.works-box .slideshow img:nth-child(3),
+.hobbies-box .slideshow img:nth-child(3){
+    animation-delay:6s;
+}
+
+
+/* ========================= */
+/* LOVE ANIMATION */
+/* ========================= */
+
 @keyframes loveSlideShow{
+
     0%{
         opacity:0;
     }
 
-    8%{
+    5%{
         opacity:1;
     }
 
@@ -695,25 +714,20 @@ footer{
         opacity:1;
     }
 
-    33%{
+    30%{
         opacity:0;
     }
 
     100%{
         opacity:0;
     }
-  }
+
 }
 
-/*LOVE PIC 3RD*/
-.love-box .slideshow img:nth-child(3){
-    object-position:center 30%;
-}
-/*WORKS PIC TO LOW 3RD */
-.works-box .slideshow img:nth-child(3){
-    object-position:center 50%;
-}
 
+/* ========================= */
+/* NORMAL 3-PIC ANIMATION */
+/* ========================= */
 
 @keyframes slideShow{
 
