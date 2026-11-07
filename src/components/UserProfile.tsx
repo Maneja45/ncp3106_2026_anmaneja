@@ -15,36 +15,20 @@ import {
   CheckCircle2,
   ShieldCheck,
 } from 'lucide-react'
-
-type ProfileData = {
-  fullName: string
-  email: string
-  age: string
-  height: string
-  weight: string
-  calories: string
-  sugar: string
-  sodium: string
-}
-
-const initialProfile: ProfileData = {
-  fullName: 'Test User',
-  email: 'test@gmail.com',
-  age: '21',
-  height: '165',
-  weight: '55',
-  calories: '2000',
-  sugar: '50',
-  sodium: '2300',
-}
+import type { ProfileData } from '../types/profile'
 
 type UserProfileProps = {
   onBack?: () => void
+  profile: ProfileData
+  onSave: (updatedProfile: ProfileData) => void
 }
 
-export default function UserProfile({ onBack }: UserProfileProps) {
-  const [profile, setProfile] = useState<ProfileData>(initialProfile)
-  const [draft, setDraft] = useState<ProfileData>(initialProfile)
+export default function UserProfile({
+  onBack,
+  profile,
+  onSave,
+}: UserProfileProps) {
+  const [draft, setDraft] = useState<ProfileData>({ ...profile })
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -52,27 +36,36 @@ export default function UserProfile({ onBack }: UserProfileProps) {
   const inputStyle: CSSProperties = {
     width: '100%',
     minWidth: 0,
-    height: 46,
-    padding: '0 14px',
-    borderRadius: 11,
+    height: 42,
+    padding: '0 12px',
+    borderRadius: 10,
     border: '1px solid var(--border)',
     background: editing ? 'var(--bg)' : 'var(--surface)',
     color: 'var(--text)',
-    fontSize: 14,
+    fontSize: 13,
     outlineColor: 'var(--primary)',
     opacity: editing ? 1 : 0.85,
+    boxSizing: 'border-box',
   }
 
   const labelStyle: CSSProperties = {
     display: 'block',
     color: 'var(--muted)',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 600,
-    marginBottom: 8,
+    marginBottom: 7,
+  }
+
+  const cardStyle: CSSProperties = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 18,
+    padding: '22px 25px',
+    boxSizing: 'border-box',
   }
 
   const updateField = (field: keyof ProfileData, value: string) => {
-    setDraft((previous) => ({
+    setDraft(previous => ({
       ...previous,
       [field]: value,
     }))
@@ -143,12 +136,12 @@ export default function UserProfile({ onBack }: UserProfileProps) {
       }
     }
 
-    // Frontend-only save. No database request is made.
-    setProfile({
+    onSave({
       ...draft,
       fullName: draft.fullName.trim(),
       email: draft.email.trim().toLowerCase(),
     })
+
     setEditing(false)
     setSaved(true)
   }
@@ -214,53 +207,142 @@ export default function UserProfile({ onBack }: UserProfileProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.3 }}
+      className="sb-settings-content"
       style={{
         width: '100%',
         maxWidth: 1050,
         margin: '0 auto',
+        padding: '2px 0 4px',
         color: 'var(--text)',
+        boxSizing: 'border-box',
       }}
     >
-      {/* Page header */}
+     
+<style>{`
+  .sb-settings-content .settings-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 16px;
+  }
+
+  .sb-settings-content .settings-goals-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .sb-settings-content .settings-card {
+    margin-bottom: 12px;
+  }
+
+  .sb-settings-content .settings-header {
+    margin-bottom: 14px;
+  }
+
+  .sb-settings-content .settings-card-description {
+    margin-bottom: 13px;
+  }
+
+  .sb-settings-content input:disabled {
+    cursor: default;
+  }
+
+  .sb-settings-content input:not(:disabled):focus {
+    border-color: var(--primary) !important;
+  }
+
+  .sb-settings-content .settings-button {
+    transition:
+      transform 0.2s ease,
+      filter 0.2s ease;
+  }
+
+  .sb-settings-content .settings-button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.07);
+  }
+
+  @media (min-width: 1000px) and (max-height: 850px) {
+    .sb-settings-content {
+      padding-top: 0 !important;
+      padding-bottom: 2px !important;
+    }
+
+    .sb-settings-content .settings-header {
+      margin-bottom: 10px;
+    }
+
+    .sb-settings-content .settings-card {
+      margin-bottom: 9px;
+      padding: 14px 20px !important;
+    }
+
+    .sb-settings-content .settings-card-description {
+      margin-bottom: 10px;
+    }
+
+    .sb-settings-content .settings-fields-grid {
+      gap: 9px 14px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .sb-settings-content .settings-fields-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 600px) {
+    .sb-settings-content .settings-fields-grid,
+    .sb-settings-content .settings-goals-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+`}</style>
+
+
+      {/* PAGE HEADER */}
       <div
+        className="settings-header"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 16,
-          marginBottom: 30,
+          gap: 12,
         }}
       >
         <div>
           <p
             style={{
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 700,
-              letterSpacing: 1.5,
+              letterSpacing: 1.4,
               color: 'var(--muted)',
-              margin: '0 0 8px',
+              margin: '0 0 5px',
             }}
           >
             ACCOUNT SETTINGS
           </p>
+
           <h1
             style={{
-              fontSize: 32,
-              margin: '0 0 8px',
-              letterSpacing: '-1px',
+              fontSize: 27,
+              margin: '0 0 5px',
+              letterSpacing: '-0.8px',
             }}
           >
             My Profile
           </h1>
+
           <p
             style={{
               color: 'var(--muted)',
               margin: 0,
-              fontSize: 14,
+              fontSize: 12,
             }}
           >
             Manage your personal information and nutrition preferences.
@@ -271,14 +353,16 @@ export default function UserProfile({ onBack }: UserProfileProps) {
           <button
             type="button"
             onClick={onBack}
+            className="settings-button"
             style={{
               border: '1px solid var(--border)',
-              borderRadius: 12,
-              padding: '11px 16px',
+              borderRadius: 11,
+              padding: '10px 14px',
               background: 'var(--surface)',
               color: 'var(--text)',
               cursor: 'pointer',
               fontWeight: 600,
+              fontSize: 12,
             }}
           >
             Back to Dashboard
@@ -286,43 +370,47 @@ export default function UserProfile({ onBack }: UserProfileProps) {
         )}
       </div>
 
-      {/* Profile summary */}
+      {/* PROFILE SUMMARY */}
       <div
+        className="settings-card"
         style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 20,
-          padding: 26,
+          ...cardStyle,
           display: 'flex',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 18,
-          marginBottom: 24,
+          gap: 15,
         }}
       >
         <div
           style={{
-            width: 68,
-            height: 68,
-            borderRadius: 20,
+            width: 58,
+            height: 58,
+            borderRadius: 16,
             background: '#DAD7CD',
             color: '#344E41',
             display: 'grid',
             placeItems: 'center',
+            flexShrink: 0,
           }}
         >
-          <UserRound size={32} />
+          <UserRound size={29} />
         </div>
 
         <div style={{ flex: 1, minWidth: 180 }}>
-          <h2 style={{ margin: '0 0 5px', fontSize: 21 }}>
+          <h2
+            style={{
+              margin: '0 0 4px',
+              fontSize: 18,
+            }}
+          >
             {profile.fullName}
           </h2>
+
           <p
             style={{
               color: 'var(--muted)',
               margin: 0,
-              fontSize: 13,
+              fontSize: 12,
             }}
           >
             {profile.email}
@@ -333,72 +421,75 @@ export default function UserProfile({ onBack }: UserProfileProps) {
           <button
             type="button"
             onClick={startEditing}
+            className="settings-button"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 9,
+              gap: 8,
               border: 0,
-              borderRadius: 12,
-              padding: '12px 17px',
+              borderRadius: 11,
+              padding: '10px 15px',
               background: '#45634D',
               color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: 12,
               cursor: 'pointer',
             }}
           >
-            <Pencil size={16} />
+            <Pencil size={15} />
             Edit Profile
           </button>
         )}
       </div>
 
       <form onSubmit={handleSave} noValidate>
-        {/* Personal information */}
+        {/* PERSONAL INFORMATION */}
         <section
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 20,
-            padding: 'clamp(20px, 4vw, 30px)',
-            marginBottom: 24,
-          }}
+          className="settings-card"
+          style={cardStyle}
         >
-          <h2 style={{ fontSize: 19, margin: '0 0 8px' }}>
+          <h2
+            style={{
+              fontSize: 17,
+              margin: '0 0 5px',
+            }}
+          >
             Personal Information
           </h2>
+
           <p
+            className="settings-card-description"
             style={{
               color: 'var(--muted)',
-              fontSize: 13,
-              margin: '0 0 26px',
-              lineHeight: 1.6,
+              fontSize: 12,
+              lineHeight: 1.5,
+              marginTop: 0,
             }}
           >
             Your basic information and body measurements.
           </p>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(min(100%, 230px), 1fr))',
-              gap: 20,
-            }}
-          >
-            {fields.map((field) => {
+          <div className="settings-fields-grid">
+            {fields.map(field => {
               const Icon = field.icon
 
               return (
-                <div key={field.key}>
-                  <label htmlFor={`profile-${field.key}`} style={labelStyle}>
+                <div
+                  key={field.key}
+                  style={{ minWidth: 0 }}
+                >
+                  <label
+                    htmlFor={`profile-${field.key}`}
+                    style={labelStyle}
+                  >
                     <span
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 7,
+                        gap: 6,
                       }}
                     >
-                      <Icon size={15} />
+                      <Icon size={13} />
                       {field.label}
                     </span>
                   </label>
@@ -409,7 +500,7 @@ export default function UserProfile({ onBack }: UserProfileProps) {
                     placeholder={field.placeholder}
                     value={draft[field.key]}
                     disabled={!editing}
-                    onChange={(event) =>
+                    onChange={event =>
                       updateField(field.key, event.target.value)
                     }
                     style={inputStyle}
@@ -420,53 +511,55 @@ export default function UserProfile({ onBack }: UserProfileProps) {
           </div>
         </section>
 
-        {/* Nutrition goals */}
+        {/* DAILY NUTRITION GOALS */}
         <section
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 20,
-            padding: 'clamp(20px, 4vw, 30px)',
-            marginBottom: 24,
-          }}
+          className="settings-card"
+          style={cardStyle}
         >
-          <h2 style={{ fontSize: 19, margin: '0 0 8px' }}>
+          <h2
+            style={{
+              fontSize: 17,
+              margin: '0 0 5px',
+            }}
+          >
             Daily Nutrition Goals
           </h2>
+
           <p
+            className="settings-card-description"
             style={{
               color: 'var(--muted)',
-              fontSize: 13,
-              lineHeight: 1.6,
-              margin: '0 0 26px',
+              fontSize: 12,
+              lineHeight: 1.5,
+              marginTop: 0,
             }}
           >
             Customize the targets displayed in your nutrition tracker.
-            These values are examples, not personalized medical recommendations.
+            These values are examples, not personalized medical
+            recommendations.
           </p>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(min(100%, 190px), 1fr))',
-              gap: 20,
-            }}
-          >
-            {nutritionFields.map((field) => {
+          <div className="settings-goals-grid">
+            {nutritionFields.map(field => {
               const Icon = field.icon
 
               return (
-                <div key={field.key}>
-                  <label htmlFor={`goal-${field.key}`} style={labelStyle}>
+                <div
+                  key={field.key}
+                  style={{ minWidth: 0 }}
+                >
+                  <label
+                    htmlFor={`goal-${field.key}`}
+                    style={labelStyle}
+                  >
                     <span
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 7,
+                        gap: 6,
                       }}
                     >
-                      <Icon size={15} />
+                      <Icon size={13} />
                       {field.label}
                     </span>
                   </label>
@@ -478,22 +571,24 @@ export default function UserProfile({ onBack }: UserProfileProps) {
                       min="0"
                       value={draft[field.key]}
                       disabled={!editing}
-                      onChange={(event) =>
+                      onChange={event =>
                         updateField(field.key, event.target.value)
                       }
                       style={{
                         ...inputStyle,
-                        paddingRight: 54,
+                        paddingRight: 47,
                       }}
                     />
 
                     <span
                       style={{
                         position: 'absolute',
-                        right: 14,
-                        top: 15,
-                        fontSize: 12,
+                        right: 12,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: 11,
                         color: 'var(--muted)',
+                        pointerEvents: 'none',
                       }}
                     >
                       {field.unit}
@@ -505,35 +600,40 @@ export default function UserProfile({ onBack }: UserProfileProps) {
           </div>
         </section>
 
-        {/* Security information */}
+        {/* ACCOUNT SECURITY */}
         <section
+          className="settings-card"
           style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 20,
-            padding: 25,
-            marginBottom: 24,
+            ...cardStyle,
             display: 'flex',
-            gap: 16,
+            gap: 12,
             alignItems: 'flex-start',
           }}
         >
           <ShieldCheck
-            size={23}
+            size={20}
             style={{
               color: 'var(--primary)',
               flexShrink: 0,
+              marginTop: 2,
             }}
           />
+
           <div>
-            <h2 style={{ fontSize: 17, margin: '0 0 8px' }}>
+            <h2
+              style={{
+                fontSize: 16,
+                margin: '0 0 5px',
+              }}
+            >
               Account Security
             </h2>
+
             <p
               style={{
                 color: 'var(--muted)',
-                fontSize: 13,
-                lineHeight: 1.7,
+                fontSize: 12,
+                lineHeight: 1.5,
                 margin: 0,
               }}
             >
@@ -543,57 +643,61 @@ export default function UserProfile({ onBack }: UserProfileProps) {
           </div>
         </section>
 
-        {/* Messages */}
+        {/* VALIDATION MESSAGE */}
         {error && (
           <p
             role="alert"
             style={{
               color: '#B45342',
-              fontSize: 13,
-              marginBottom: 18,
+              fontSize: 12,
+              margin: '8px 0',
             }}
           >
             {error}
           </p>
         )}
 
+        {/* SUCCESS MESSAGE */}
         {saved && (
           <p
             role="status"
             style={{
               color: 'var(--primary)',
-              fontSize: 13,
+              fontSize: 12,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              marginBottom: 18,
+              margin: '8px 0',
             }}
           >
-            <CheckCircle2 size={17} />
-            Profile updated in this demo session.
+            <CheckCircle2 size={16} />
+            Profile changes saved in this browser demo.
           </p>
         )}
 
-        {/* Save / cancel */}
+        {/* SAVE / CANCEL */}
         {editing && (
           <div
             style={{
               display: 'flex',
               justifyContent: 'flex-end',
               flexWrap: 'wrap',
-              gap: 12,
+              gap: 10,
+              marginTop: 8,
             }}
           >
             <button
               type="button"
               onClick={cancelEditing}
+              className="settings-button"
               style={{
-                padding: '13px 22px',
-                borderRadius: 12,
+                padding: '10px 16px',
+                borderRadius: 10,
                 border: '1px solid var(--border)',
                 background: 'var(--surface)',
                 color: 'var(--text)',
                 fontWeight: 700,
+                fontSize: 12,
                 cursor: 'pointer',
               }}
             >
@@ -607,17 +711,18 @@ export default function UserProfile({ onBack }: UserProfileProps) {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 9,
-                padding: '13px 22px',
-                borderRadius: 12,
+                gap: 8,
+                padding: '10px 16px',
+                borderRadius: 10,
                 border: 0,
                 background: '#45634D',
                 color: '#FFFFFF',
                 fontWeight: 700,
+                fontSize: 12,
                 cursor: 'pointer',
               }}
             >
-              <Save size={17} />
+              <Save size={15} />
               Save Changes
             </motion.button>
           </div>

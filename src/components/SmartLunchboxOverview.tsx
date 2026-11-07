@@ -56,7 +56,7 @@ export default function SmartLunchboxOverview() {
   )
 
   return (
-    <section style={{ marginTop: 36, marginBottom: 48 }}>
+    <section style={{ marginTop: 20, marginBottom: 48 }}>
       {/* Section header */}
       <div
         style={{
@@ -66,6 +66,7 @@ export default function SmartLunchboxOverview() {
           flexWrap: 'wrap',
           gap: 16,
           marginBottom: 20,
+          marginTop: 5,
         }}
       >
         <div>

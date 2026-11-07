@@ -1,5 +1,4 @@
-
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Moon, Sun, Candy, Droplets } from 'lucide-react'
 
@@ -7,6 +6,11 @@ import Sidebar from './components/Sidebar'
 import CalorieRing from './components/CalorieRing'
 import NutritionCard from './components/NutritionCard'
 import SmartLunchboxOverview from './components/SmartLunchboxOverview'
+import SmartLunchbox from './SmartLunchbox'
+import MealHistory from './components/MealHistory'
+import MealPlanner from './components/MealPlanner'
+import Recipes from './components/Recipes'
+import NutritionReports from './components/NutritionReports'
 import OpeningAnimation from './components/OpeningAnimation'
 import Login from './components/Login'
 import Register from './components/Register'
@@ -14,6 +18,11 @@ import EmailVerification from './components/EmailVerification'
 import ForgotPassword from './components/ForgotPassword'
 import ResetPassword from './components/ResetPassword'
 import UserProfile from './components/UserProfile'
+
+import {
+  initialProfile,
+  type ProfileData,
+} from './types/profile'
 
 import './App.css'
 
@@ -34,19 +43,114 @@ type DashboardPage =
   | 'Nutrition Reports'
   | 'Settings'
 
+const PROFILE_STORAGE_KEY = 'sustansyabox_profile'
+
+const dashboardPages: DashboardPage[] = [
+  'Dashboard',
+  'Smart Lunchbox',
+  'Meal History',
+  'Meal Planner',
+  'Recipes',
+  'Nutrition Reports',
+  'Settings',
+]
+
+function loadProfile(): ProfileData {
+  try {
+    const stored = localStorage.getItem(PROFILE_STORAGE_KEY)
+
+    if (stored) {
+      const parsed: unknown = JSON.parse(stored)
+
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed)
+      ) {
+        const values = parsed as Record<string, unknown>
+        const result = { ...initialProfile }
+
+        for (
+          const key of Object.keys(initialProfile) as
+            (keyof ProfileData)[]
+        ) {
+          if (typeof values[key] === 'string') {
+            result[key] = values[key]
+          }
+        }
+
+        return result
+      }
+    }
+  } catch {
+    // Use default profile.
+  }
+
+  return { ...initialProfile }
+}
+
 function App() {
+  // =====================================
+  // PROFILE
+  // =====================================
+
+  const [profile, setProfile] =
+    useState<ProfileData>(loadProfile)
+
+  // =====================================
+  // AUTHENTICATION
+  // =====================================
+
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [authPage, setAuthPage] = useState<AuthPage>('login')
+
+  const [authPage, setAuthPage] =
+    useState<AuthPage>('login')
+
   const [pendingEmail, setPendingEmail] = useState('')
+
+  // =====================================
+  // APPEARANCE
+  // =====================================
+
   const [darkMode, setDarkMode] = useState(false)
+
   const [showOpening, setShowOpening] = useState(false)
 
-  // Sidebar navigation
+  // =====================================
+  // NAVIGATION
+  // =====================================
+
   const [activePage, setActivePage] =
     useState<DashboardPage>('Dashboard')
 
+  // =====================================
+  // PROFILE STORAGE
+  // =====================================
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        PROFILE_STORAGE_KEY,
+        JSON.stringify(profile)
+      )
+    } catch {
+      // Browser storage may be unavailable.
+    }
+  }, [profile])
+
+  const handleSaveProfile = (
+    updatedProfile: ProfileData
+  ) => {
+    setProfile(updatedProfile)
+  }
+
+  // =====================================
+  // THEME
+  // =====================================
+
   const toggleTheme = () => {
     const nextMode = !darkMode
+
     setDarkMode(nextMode)
 
     document.documentElement.setAttribute(
@@ -55,8 +159,14 @@ function App() {
     )
   }
 
-  // Frontend-only demo login
-  const handleLogin = (email: string, password: string) => {
+  // =====================================
+  // AUTHENTICATION HANDLERS
+  // =====================================
+
+  const handleLogin = (
+    email: string,
+    password: string
+  ) => {
     if (!email || !password) return
 
     setActivePage('Dashboard')
@@ -64,13 +174,11 @@ function App() {
     setIsLoggedIn(true)
   }
 
-  // Frontend-only registration
   const handleRegister = (data: { email: string }) => {
     setPendingEmail(data.email)
     setAuthPage('register-verify')
   }
 
-  // Frontend-only password recovery
   const handleForgotPassword = (email: string) => {
     setPendingEmail(email)
     setAuthPage('recovery-verify')
@@ -91,22 +199,15 @@ function App() {
   }
 
   const handleNavigate = (page: string) => {
-    const pages: DashboardPage[] = [
-      'Dashboard',
-      'Smart Lunchbox',
-      'Meal History',
-      'Meal Planner',
-      'Recipes',
-      'Nutrition Reports',
-      'Settings',
-    ]
-
-    if (pages.includes(page as DashboardPage)) {
+    if (dashboardPages.includes(page as DashboardPage)) {
       setActivePage(page as DashboardPage)
     }
   }
 
-  // Authentication pages
+  // =====================================
+  // AUTHENTICATION SCREENS
+  // =====================================
+
   if (!isLoggedIn) {
     return (
       <AnimatePresence mode="wait">
@@ -218,218 +319,622 @@ function App() {
     )
   }
 
-  // Dashboard and sidebar pages
+  // =====================================
+  // MAIN APPLICATION
+  // =====================================
+
   return (
-    <div
-      className="app"
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-      }}
-    >
+    <div className="app sustansya-app-shell">
+      <style>{`
+
+        /* =====================================
+           APPLICATION SHELL
+           ===================================== */
+
+        .sustansya-app-shell,
+        .sustansya-app-shell * {
+          box-sizing: border-box;
+        }
+
+        .sustansya-app-shell {
+          display: flex;
+          width: 100%;
+          height: 100dvh;
+          min-height: 0;
+          overflow: hidden;
+        }
+
+        .sustansya-workspace {
+          flex: 1;
+          min-width: 0;
+          min-height: 0;
+
+          display: flex;
+          flex-direction: column;
+
+          padding: 12px 22px;
+          overflow: hidden;
+        }
+
+        .sustansya-content {
+          flex: 1;
+          min-width: 0;
+          min-height: 0;
+        }
+
+        .sustansya-content.dashboard-active {
+          overflow: hidden;
+        }
+
+        .sustansya-content.other-page-active {
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+
+        /* =====================================
+           HEADER
+           ===================================== */
+
+        .sb-page-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+
+          flex-shrink: 0;
+          margin-bottom: 9px;
+        }
+         /* Dashboard heading: slightly lower */
+        .sb-dashboard-page-header {
+        padding-top: 12px;
+         }
+
+        .sb-page-eyebrow {
+          margin: 0 0 2px;
+
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+
+          color: var(--muted);
+        }
+
+        .sb-page-title {
+          margin: 0;
+
+          font-size: clamp(22px, 2vw, 28px);
+          font-weight: 700;
+          line-height: 1.15;
+
+          color: var(--text);
+        }
+
+        .sb-theme-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          width: 42px;
+          height: 42px;
+
+          background: var(--surface);
+          color: var(--text);
+
+          border: 1px solid var(--border);
+          border-radius: 12px;
+
+          cursor: pointer;
+
+          transition:
+            transform 0.2s ease,
+            background 0.2s ease;
+        }
+
+        .sb-theme-button:hover {
+          transform: rotate(12deg);
+        }
+
+        /* =====================================
+           BALANCED DASHBOARD LAYOUT
+           ===================================== */
+
+        .sb-dashboard {
+          height: 100%;
+          min-height: 0;
+          min-width: 0;
+
+          display: grid;
+
+          grid-template-rows:
+            auto
+            minmax(295px, calc(43% + 20px))
+            minmax(0, 1fr);
+
+          gap: 10px;
+          overflow: hidden;
+        }
+
+        /* =====================================
+           WELCOME SECTION
+           ===================================== */
+
+        .sb-dashboard-welcome {
+          margin: 0;
+          padding: 0;
+          min-height: 0;
+        }
+
+        .sb-dashboard-welcome h2 {
+          margin: 0 0 3px;
+
+          font-size: clamp(15px, 1.4vw, 19px);
+          line-height: 1.2;
+
+          color: var(--primary);
+        }
+
+        .sb-dashboard-welcome p {
+          margin: 0;
+
+          font-size: 11px;
+          line-height: 1.35;
+
+          color: var(--muted);
+        }
+
+        /* =====================================
+           TODAY'S NUTRITION
+           ===================================== */
+
+        .sb-nutrition {
+          display: flex;
+          flex-direction: column;
+
+          min-width: 0;
+          min-height: 0;
+
+          gap: 7px;
+        }
+
+        .sb-section-heading {
+          margin: 0;
+
+          font-size: clamp(14px, 1.25vw, 17px);
+          font-weight: 700;
+          line-height: 1.2;
+
+          color: var(--text);
+          flex-shrink: 0;
+        }
+
+        .sb-nutrition-grid {
+          display: grid;
+
+          grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+
+          gap: 14px;
+          flex: 1;
+
+          min-width: 0;
+          min-height: 0;
+        }
+
+        /* =====================================
+           CALORIE CARD
+           ===================================== */
+
+        .sb-calorie-area {
+          display: flex;
+
+          min-width: 0;
+          min-height: 0;
+
+          overflow: hidden;
+        }
+
+        .sb-calorie-area > * {
+          width: 100%;
+          height: 100%;
+
+          min-width: 0;
+          min-height: 0;
+        }
+
+        /*
+          Do not resize the SVG separately.
+          The calorie ring and center labels
+          must retain their original geometry.
+        */
+
+        /* =====================================
+           SUGAR AND SODIUM CARDS
+           ===================================== */
+
+        .sb-nutrients-area {
+          display: grid;
+
+          grid-template-rows:
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+
+          gap: 12px;
+
+          min-width: 0;
+          min-height: 0;
+        }
+
+        .sb-nutrients-area > * {
+          height: 100%;
+
+          min-height: 0;
+          min-width: 0;
+
+          overflow: hidden;
+
+          padding: 12px 18px !important;
+        }
+
+        .sb-nutrients-area p,
+        .sb-nutrients-area small {
+          line-height: 1.3;
+        }
+
+        /* =====================================
+           SMART LUNCHBOX OVERVIEW
+           ===================================== */
+
+        .sb-lunchbox-area {
+          min-height: 0;
+          min-width: 0;
+
+          overflow: hidden;
+        }
+
+        .sb-lunchbox-scale {
+          zoom: 0.62;
+          width: 100%;
+        }
+
+        /* =====================================
+           LARGE DESKTOP SCREENS
+           ===================================== */
+
+        @media (min-height: 1000px) {
+          .sb-dashboard {
+            grid-template-rows:
+              auto
+              minmax(330px, calc(42% + 20px))
+              minmax(0, 1fr);
+          }
+
+          .sb-lunchbox-scale {
+            zoom: 0.73;
+          }
+        }
+
+        /* =====================================
+           SHORT DESKTOP SCREENS
+           ===================================== */
+
+        @media (max-height: 800px) {
+          .sustansya-workspace {
+            padding: 9px 18px;
+          }
+
+          .sb-page-header {
+            margin-bottom: 5px;
+          }
+
+          .sb-dashboard {
+            grid-template-rows:
+              auto
+              minmax(245px, calc(42% + 20px))
+              minmax(0, 1fr);
+
+            gap: 6px;
+          }
+
+          .sb-nutrition {
+            gap: 4px;
+          }
+
+          .sb-nutrition-grid {
+            gap: 10px;
+          }
+
+          .sb-nutrients-area {
+            gap: 8px;
+          }
+
+          .sb-nutrients-area > * {
+            padding: 8px 14px !important;
+          }
+
+          .sb-lunchbox-scale {
+            zoom: 0.54;
+          }
+        }
+
+        /* =====================================
+           VERY SHORT SCREENS
+           ===================================== */
+
+        @media (max-height: 650px) {
+          .sb-dashboard {
+            grid-template-rows:
+              auto
+              minmax(220px, calc(43% + 20px))
+              minmax(0, 1fr);
+          }
+
+          .sb-lunchbox-scale {
+            zoom: 0.46;
+          }
+        }
+
+        /* =====================================
+           NARROW SCREENS
+           ===================================== */
+
+        @media (max-width: 900px) {
+          .sustansya-workspace {
+            padding: 14px;
+          }
+
+          .sustansya-content.dashboard-active {
+            overflow-y: auto;
+          }
+
+          .sb-dashboard {
+            display: flex;
+            flex-direction: column;
+
+            height: auto;
+            min-height: 100%;
+
+            gap: 16px;
+            overflow: visible;
+          }
+
+          .sb-nutrition-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .sb-calorie-area {
+            min-height: 280px;
+          }
+
+          .sb-nutrients-area {
+            min-height: 240px;
+          }
+
+          .sb-lunchbox-area {
+            overflow: visible;
+          }
+
+          .sb-lunchbox-scale {
+            zoom: 1;
+          }
+
+          .sb-nutrients-area > * {
+            padding: 18px !important;
+          }
+        }
+
+      `}</style>
+
+      {/* =====================================
+          OPENING ANIMATION
+          ===================================== */}
+
       <AnimatePresence>
         {showOpening && (
           <OpeningAnimation
-            onComplete={() => setShowOpening(false)}
+            onComplete={() =>
+              setShowOpening(false)
+            }
           />
         )}
       </AnimatePresence>
+
+      {/* =====================================
+          SIDEBAR
+          ===================================== */}
 
       <Sidebar
         activePage={activePage}
         onNavigate={handleNavigate}
       />
 
-      <main
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: '36px',
-        }}
-      >
-        {/* Theme toggle */}
-        <header
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            marginBottom: activePage === 'Dashboard' ? 0 : 30,
-          }}
-        >
+      {/* =====================================
+          MAIN WORKSPACE
+          ===================================== */}
+          
+
+      <main className="sustansya-workspace">
+
+        {/* HEADER */}
+
+       <header
+  className={`sb-page-header ${
+    activePage === 'Dashboard'
+      ? 'sb-dashboard-page-header'
+      : ''
+  }`}
+>
           <div>
-            <p
-              style={{
-                color: 'var(--muted)',
-                margin: '0 0 8px',
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: '1.5px',
-              }}
-            >
+            <p className="sb-page-eyebrow">
               OVERVIEW
             </p>
 
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 32,
-                color: 'var(--text)',
-              }}
-            >
+            <h1 className="sb-page-title">
               {activePage}
             </h1>
           </div>
 
           <button
             type="button"
+            className="sb-theme-button"
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            style={{
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              border: '1px solid var(--border)',
-              borderRadius: 12,
-              padding: 12,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
           >
             {darkMode ? (
-              <Sun size={22} />
+              <Sun size={20} />
             ) : (
-              <Moon size={22} />
+              <Moon size={20} />
             )}
           </button>
         </header>
 
-        {/* Dashboard */}
-        {activePage === 'Dashboard' && (
-          <>
-            <section style={{ marginTop: 48 }}>
-              <h2
-                style={{
-                  color: 'var(--primary)',
-                  marginBottom: 10,
-                }}
-              >
-                Welcome to SustansyaBox!
-              </h2>
+        {/* =====================================
+            PAGE CONTENT
+            ===================================== */}
 
-              <p
-                style={{
-                  color: 'var(--muted)',
-                  margin: 0,
-                }}
-              >
-                Monitor your meals, track your nutrition,
-                and stay connected to your smart lunchbox.
-              </p>
-            </section>
+        <div
+          className={`sustansya-content ${
+            activePage === 'Dashboard'
+              ? 'dashboard-active'
+              : 'other-page-active'
+          }`}
+        >
 
-            <section style={{ marginTop: 32 }}>
-              <h2
-                style={{
-                  fontSize: 20,
-                  color: 'var(--text)',
-                  marginBottom: 20,
-                }}
-              >
-                Today's Nutrition
-              </h2>
+          {/* =====================================
+              DASHBOARD
+              ===================================== */}
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns:
-                    'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-                  gap: 20,
-                  alignItems: 'stretch',
-                }}
-              >
-                <CalorieRing
-                  consumed={1250}
-                  goal={2000}
-                />
+          {activePage === 'Dashboard' && (
+            <div className="sb-dashboard">
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 20,
-                  }}
-                >
-                  <NutritionCard
-                    title="Sugar Intake"
-                    consumed={28}
-                    goal={50}
-                    unit="g"
-                    icon={Candy}
-                    color="#C58A63"
-                  />
+              {/* WELCOME */}
 
-                  <NutritionCard
-                    title="Sodium Intake"
-                    consumed={1400}
-                    goal={2300}
-                    unit="mg"
-                    icon={Droplets}
-                    color="#83A9A0"
-                  />
+              <section className="sb-dashboard-welcome">
+                <h2>
+                  Welcome to SustansyaBox!
+                </h2>
+
+                <p>
+                  Monitor your meals, track your
+                  nutrition, and stay connected
+                  to your smart lunchbox.
+                </p>
+              </section>
+
+              {/* =====================================
+                  TODAY'S NUTRITION
+                  ===================================== */}
+
+              <section className="sb-nutrition">
+
+                <h2 className="sb-section-heading">
+                  Today's Nutrition
+                </h2>
+
+                <div className="sb-nutrition-grid">
+
+                  {/* CALORIE RING */}
+
+                  <div className="sb-calorie-area">
+                    <CalorieRing
+                      consumed={1250}
+                      goal={Number(profile.calories)}
+                    />
+                  </div>
+
+                  {/* SUGAR AND SODIUM */}
+
+                  <div className="sb-nutrients-area">
+
+                    <NutritionCard
+                      title="Sugar Intake"
+                      consumed={28}
+                      goal={Number(profile.sugar)}
+                      unit="g"
+                      icon={Candy}
+                      color="#C58A63"
+                    />
+
+                    <NutritionCard
+                      title="Sodium Intake"
+                      consumed={1400}
+                      goal={Number(profile.sodium)}
+                      unit="mg"
+                      icon={Droplets}
+                      color="#83A9A0"
+                    />
+
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            <SmartLunchboxOverview />
-          </>
-        )}
+              {/* =====================================
+                  SMART LUNCHBOX OVERVIEW
+                  ===================================== */}
 
-        {/* User Profile */}
-        {activePage === 'Settings' && (
-          <UserProfile
-            onBack={() => setActivePage('Dashboard')}
-          />
-        )}
+              <section className="sb-lunchbox-area">
+                <div className="sb-lunchbox-scale">
+                  <SmartLunchboxOverview />
+                </div>
+              </section>
 
-        {/* Upcoming sections */}
-        {activePage !== 'Dashboard' &&
-          activePage !== 'Settings' && (
-            <motion.section
-              key={activePage}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 20,
-                padding: 32,
-                marginTop: 20,
-              }}
-            >
-              <h2
-                style={{
-                  color: 'var(--primary)',
-                  marginTop: 0,
-                }}
-              >
-                {activePage}
-              </h2>
-
-              <p
-                style={{
-                  color: 'var(--muted)',
-                  lineHeight: 1.8,
-                  marginBottom: 0,
-                }}
-              >
-                This section is coming soon.
-                We'll build its features in the next steps.
-              </p>
-            </motion.section>
+            </div>
           )}
+
+          {/* =====================================
+              SETTINGS
+              ===================================== */}
+
+          {activePage === 'Settings' && (
+            <UserProfile
+              profile={profile}
+              onSave={handleSaveProfile}
+              onBack={() =>
+                setActivePage('Dashboard')
+              }
+            />
+          )}
+
+          {/* =====================================
+              SMART LUNCHBOX
+              ===================================== */}
+
+          {activePage === 'Smart Lunchbox' && (
+            <SmartLunchbox />
+          )}
+
+          {/* =====================================
+              MEAL HISTORY
+              ===================================== */}
+
+          {activePage === 'Meal History' && (
+            <MealHistory />
+          )}
+
+          {/* =====================================
+              MEAL PLANNER
+              ===================================== */}
+
+          {activePage === 'Meal Planner' && (
+            <MealPlanner />
+          )}
+
+          {/* =====================================
+              RECIPES
+              ===================================== */}
+
+          {activePage === 'Recipes' && (
+            <Recipes />
+          )}
+
+          {/* =====================================
+              NUTRITION REPORTS
+              ===================================== */}
+
+          {activePage === 'Nutrition Reports' && (
+            <NutritionReports />
+          )}
+
+        </div>
       </main>
     </div>
   )
