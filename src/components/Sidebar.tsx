@@ -11,6 +11,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   UserRound,
+  UsersRound,
 } from 'lucide-react'
 
 const navigation = [
@@ -20,6 +21,7 @@ const navigation = [
   { label: 'Meal Planner', icon: CalendarDays },
   { label: 'Recipes', icon: BookOpen },
   { label: 'Nutrition Reports', icon: ChartNoAxesColumn },
+  { label: 'About Us', icon: UsersRound },
   { label: 'Settings', icon: Settings },
 ]
 

@@ -18,6 +18,7 @@ import EmailVerification from './components/EmailVerification'
 import ForgotPassword from './components/ForgotPassword'
 import ResetPassword from './components/ResetPassword'
 import UserProfile from './components/UserProfile'
+import AboutUsPreview from './components/AboutUsPreview'
 
 import {
   initialProfile,
@@ -41,6 +42,7 @@ type DashboardPage =
   | 'Meal Planner'
   | 'Recipes'
   | 'Nutrition Reports'
+  | 'About Us'
   | 'Settings'
 
 const PROFILE_STORAGE_KEY = 'sustansyabox_profile'
@@ -52,6 +54,7 @@ const dashboardPages: DashboardPage[] = [
   'Meal Planner',
   'Recipes',
   'Nutrition Reports',
+  'About Us',
   'Settings',
 ]
 
@@ -932,6 +935,14 @@ function App() {
 
           {activePage === 'Nutrition Reports' && (
             <NutritionReports />
+          )}
+
+          {/* =====================================
+              ABOUT US
+              ===================================== */}
+
+          {activePage === 'About Us' && (
+            <AboutUsPreview />
           )}
 
         </div>

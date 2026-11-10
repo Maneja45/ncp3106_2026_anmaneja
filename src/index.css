@@ -2,6 +2,14 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
 /* ==========================================
+   TAILWIND — ANIMATION UTILITIES
+   No global Preflight reset
+   ========================================== */
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* ==========================================
    SUSTANSYABOX — GLOBAL STYLES
    ========================================== */
 
@@ -192,4 +200,47 @@ aside {
   body {
     min-width: 320px;
   }
+}
+
+/* ==========================================
+   SUSTANSYABOX — TEAM LANYARD THEME
+   ========================================== */
+
+[data-slot="team-lanyard-rail"] {
+  --color-background: var(--surface);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-muted: var(--bg);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--primary);
+
+  background: var(--surface);
+  color: var(--text);
+}
+
+[data-slot="team-lanyard-rail"] [data-stage] {
+  background: transparent;
+}
+
+[data-slot="team-lanyard-rail"] [data-badge] {
+  touch-action: none;
+}
+/* ==========================================
+   ABOUT US — MATCHA GREEN ID HEADER
+   LIGHT MODE ONLY
+   ========================================== */
+
+:root:not([data-theme="dark"])
+[data-slot="team-lanyard-rail"]
+[data-face]
+[data-slot="unused"] {
+  color: #45634D;
+}
+
+:root:not([data-theme="dark"])
+[data-slot="team-lanyard-rail"]
+[data-face] > span:first-child {
+  color: #45634D !important;
 }
