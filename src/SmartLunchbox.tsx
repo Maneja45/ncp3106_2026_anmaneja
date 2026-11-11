@@ -2,9 +2,20 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
-  BatteryFull, Check, CheckCircle2, CircleHelp, Cpu,
-  Droplets, Info, Plus, RefreshCcw, Scale, Search,
-  Signal, UtensilsCrossed, Wifi, X,
+  BatteryFull,
+  Check,
+  CheckCircle2,
+  Cpu,
+  Droplets,
+  Info,
+  Plus,
+  RefreshCcw,
+  Scale,
+  Search,
+  Signal,
+  UtensilsCrossed,
+  Wifi,
+  X,
 } from 'lucide-react'
 
 type Food = {
@@ -131,16 +142,79 @@ export default function SmartLunchbox() {
   ]
 
   return (
-  <motion.div
-  className="smart-page"
-  initial={{ opacity: 0 }}
-  animate={{ opacity: 1 }}
-  transition={{
-    duration: 0.28,
-    ease: 'easeOut',
-  }}
->
+    <motion.div
+      className="smart-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{
+        duration: 0.28,
+        ease: 'easeOut',
+      }}
+    >
       <style>{`
+        /* =====================================
+           SUSTANSYABOX TYPOGRAPHY
+           Georgia headings / DM Sans body / Manrope statistics
+           ===================================== */
+        .smart-page {
+          font-family: 'DM Sans', sans-serif;
+        }
+        .smart-page button,
+        .smart-page input,
+        .smart-page select,
+        .smart-page textarea {
+          font-family: 'DM Sans', sans-serif;
+        }
+        .smart-page .smart-title,
+        .smart-page .smart-panel-title,
+        .smart-page .smart-section-title,
+        .smart-page .smart-modal-title {
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 700;
+          letter-spacing: -0.45px;
+        }
+        .smart-page .smart-eyebrow,
+        .smart-page .smart-modal-label,
+        .smart-page .smart-calorie-label {
+          font-family: 'Manrope', sans-serif;
+          font-weight: 800;
+        }
+        .smart-page .smart-status-value,
+        .smart-page .smart-calorie-value,
+        .smart-page .smart-calorie-unit,
+        .smart-page .smart-nutrition-value,
+        .smart-page .smart-compartment-weight,
+        .smart-page .smart-detail-food-meta,
+        .smart-page .smart-stat-number,
+        .smart-page .smart-sensor-reading,
+        .smart-page .smart-selected-value {
+          font-family: 'Manrope', sans-serif;
+          font-variant-numeric: tabular-nums;
+        }
+        .smart-page .smart-device-title,
+        .smart-page .smart-status-name,
+        .smart-page .smart-compartment-name,
+        .smart-page .smart-detail-name,
+        .smart-page .smart-detail-food-name,
+        .smart-page .smart-help-title,
+        .smart-page .smart-nutrition-name,
+        .smart-page .smart-muted,
+        .smart-page .smart-panel-subtitle,
+        .smart-page .smart-button,
+        .smart-page .smart-badge {
+          font-family: 'DM Sans', sans-serif;
+        }
+        .smart-page .smart-title {
+          font-size: clamp(22px, 2vw, 27px);
+        }
+        .smart-page .smart-panel-title,
+        .smart-page .smart-section-title {
+          font-size: 17px;
+        }
+        .smart-page .smart-modal-title {
+          font-size: 23px;
+        }
+
         .smart-page, .smart-page * { box-sizing: border-box; }
         .smart-page {
           width: 100%;
@@ -159,10 +233,10 @@ export default function SmartLunchbox() {
           justify-content: space-between;
           gap: 12px;
         }
-          
-          .smart-header {
+
+        .smart-header {
           margin-top: 14px;
-          } 
+        }
 
         .smart-eyebrow {
           color: var(--primary);
@@ -198,11 +272,11 @@ export default function SmartLunchbox() {
           border-radius: 17px;
           min-width: 0;
         }
-        
-         .smart-device {
-         padding: 11px 15px;
-         margin-top: 5px;
-         }
+
+        .smart-device {
+          padding: 11px 15px;
+          margin-top: 5px;
+        }
 
         .smart-device-info {
           display: flex;
@@ -271,12 +345,12 @@ export default function SmartLunchbox() {
         }
 
         /* BALANCED MAIN LAYOUT */
-       .smart-main-grid {
-       display: grid;
-       grid-template-columns: 1.35fr 1fr;
-       gap: 12px;
-       margin-top: 18px;
-       }
+        .smart-main-grid {
+          display: grid;
+          grid-template-columns: 1.35fr 1fr;
+          gap: 12px;
+          margin-top: 18px;
+        }
 
         .smart-panel {
           padding: 14px;
@@ -412,13 +486,13 @@ export default function SmartLunchbox() {
           gap: 7px;
         }
 
-      /* COMPARTMENT DETAILS: SLIGHTLY LOWER AND ROOMIER */
+        /* COMPARTMENT DETAILS: SLIGHTLY LOWER AND ROOMIER */
         .smart-details-section {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-top: 15px;
-      }
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-top: 15px;
+        }
         .smart-section-title {
           margin: 0;
           font-size: 15px;
@@ -535,6 +609,7 @@ export default function SmartLunchbox() {
           margin-bottom: 12px;
         }
         .smart-simulator {
+
           padding: 12px;
           border: 1px dashed var(--border);
           border-radius: 12px;
@@ -611,6 +686,41 @@ export default function SmartLunchbox() {
           font-weight: 650;
         }
 
+        /* =====================================
+           TYPOGRAPHY REFINEMENTS
+           ===================================== */
+
+        .smart-page .smart-title {
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: clamp(22px, 2vw, 27px);
+          font-weight: 700;
+        }
+
+        .smart-page .smart-panel-title,
+        .smart-page .smart-section-title {
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 17px;
+          font-weight: 700;
+        }
+
+        .smart-page .smart-modal-title {
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 23px;
+          font-weight: 700;
+        }
+
+        .smart-page .smart-status-value,
+        .smart-page .smart-calorie-value,
+        .smart-page .smart-calorie-unit,
+        .smart-page .smart-nutrition-value,
+        .smart-page .smart-compartment-weight,
+        .smart-page .smart-detail-food-meta,
+        .smart-page .smart-sensor-reading,
+        .smart-page .smart-selected-value {
+          font-family: 'Manrope', sans-serif;
+          font-variant-numeric: tabular-nums;
+        }
+
         /* COMPACT DESKTOP HEIGHT */
         @media (min-width: 1100px) and (max-height: 850px) {
           .smart-page { gap: 8px; }
@@ -625,7 +735,7 @@ export default function SmartLunchbox() {
           .smart-calorie-box { padding: 9px; margin-bottom: 5px; }
           .smart-nutrition-row { padding: 7px 1px; }
           .smart-nutrition-footer { padding-top: 7px; gap: 5px; }
-          .smart-details-section {  margin-top: 15px;}
+          .smart-details-section { margin-top: 15px; }
           .smart-detail-card { padding: 10px; }
           .smart-detail-header { margin-bottom: 7px; }
           .smart-detail-food {
@@ -641,6 +751,7 @@ export default function SmartLunchbox() {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
+
         @media (max-width: 750px) {
           .smart-main-grid { grid-template-columns: 1fr; }
           .smart-details-grid { grid-template-columns: 1fr; }
@@ -649,6 +760,7 @@ export default function SmartLunchbox() {
           .smart-lunchbox-stage { min-height: 220px; }
           .smart-lunchbox-shell { height: 220px; }
         }
+
         @media (max-width: 420px) {
           .smart-status-grid { gap: 8px; }
           .smart-status-card { padding: 10px; }
@@ -890,19 +1002,6 @@ export default function SmartLunchbox() {
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="smart-card smart-help">
-        <CircleHelp size={18} color="var(--primary)" style={{ flexShrink: 0 }} />
-        <div>
-          <h3 className="smart-help-title">How will SustansyaBox work?</h3>
-          <p className="smart-help-text">
-            The weight sensor will detect food, prompt you to identify it,
-            and calculate its calories, sugar, and sodium automatically.
-            Currently using simulated readings for frontend testing.
-          </p>
-        </div>
-      </section>
-
       {/* NOTIFICATION */}
       <AnimatePresence>
         {notification && (
@@ -980,7 +1079,9 @@ export default function SmartLunchbox() {
                 <Scale size={20} color="var(--primary)" />
                 <div style={{ flex: 1 }}>
                   <p className="smart-muted">Sample sensor reading</p>
-                  <strong style={{ fontSize: 21 }}>{demoWeight} g</strong>
+                  <strong className="smart-sensor-reading" style={{ fontSize: 21 }}>
+                    {demoWeight} g
+                  </strong>
                 </div>
                 <span className="smart-muted" style={{ fontWeight: 750 }}>
                   DEMO DATA
@@ -1088,6 +1189,7 @@ export default function SmartLunchbox() {
                     ].map(item => (
                       <div key={item.label}>
                         <strong
+                          className="smart-selected-value"
                           style={{
                             display: 'block',
                             fontSize: 18,

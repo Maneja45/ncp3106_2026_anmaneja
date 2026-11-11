@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Moon, Sun, Candy, Droplets } from 'lucide-react'
@@ -19,12 +20,9 @@ import ForgotPassword from './components/ForgotPassword'
 import ResetPassword from './components/ResetPassword'
 import UserProfile from './components/UserProfile'
 import AboutUsPreview from './components/AboutUsPreview'
+import NotificationBell from './components/NotificationBell'
 
-import {
-  initialProfile,
-  type ProfileData,
-} from './types/profile'
-
+import { initialProfile, type ProfileData } from './types/profile'
 import './App.css'
 
 type AuthPage =
@@ -93,43 +91,25 @@ function loadProfile(): ProfileData {
 }
 
 function App() {
-  // =====================================
   // PROFILE
-  // =====================================
-
   const [profile, setProfile] =
     useState<ProfileData>(loadProfile)
 
-  // =====================================
   // AUTHENTICATION
-  // =====================================
-
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-
   const [authPage, setAuthPage] =
     useState<AuthPage>('login')
-
   const [pendingEmail, setPendingEmail] = useState('')
 
-  // =====================================
   // APPEARANCE
-  // =====================================
-
   const [darkMode, setDarkMode] = useState(false)
-
   const [showOpening, setShowOpening] = useState(false)
 
-  // =====================================
   // NAVIGATION
-  // =====================================
-
   const [activePage, setActivePage] =
     useState<DashboardPage>('Dashboard')
 
-  // =====================================
   // PROFILE STORAGE
-  // =====================================
-
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -141,16 +121,11 @@ function App() {
     }
   }, [profile])
 
-  const handleSaveProfile = (
-    updatedProfile: ProfileData
-  ) => {
+  const handleSaveProfile = (updatedProfile: ProfileData) => {
     setProfile(updatedProfile)
   }
 
-  // =====================================
   // THEME
-  // =====================================
-
   const toggleTheme = () => {
     const nextMode = !darkMode
 
@@ -162,10 +137,7 @@ function App() {
     )
   }
 
-  // =====================================
   // AUTHENTICATION HANDLERS
-  // =====================================
-
   const handleLogin = (
     email: string,
     password: string
@@ -207,10 +179,7 @@ function App() {
     }
   }
 
-  // =====================================
   // AUTHENTICATION SCREENS
-  // =====================================
-
   if (!isLoggedIn) {
     return (
       <AnimatePresence mode="wait">
@@ -322,13 +291,41 @@ function App() {
     )
   }
 
-  // =====================================
   // MAIN APPLICATION
-  // =====================================
-
   return (
     <div className="app sustansya-app-shell">
       <style>{`
+        /* =====================================
+           SUSTANSYABOX TYPOGRAPHY SYSTEM
+           ===================================== */
+
+        .sustansya-app-shell {
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .sustansya-app-shell button,
+        .sustansya-app-shell input,
+        .sustansya-app-shell select,
+        .sustansya-app-shell textarea {
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .sustansya-app-shell .sb-page-title,
+        .sustansya-app-shell .sb-dashboard-welcome h1,
+        .sustansya-app-shell .sb-section-heading {
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 700;
+          letter-spacing: -0.6px;
+        }
+
+        .sustansya-app-shell .sb-page-eyebrow {
+          font-family: 'Manrope', sans-serif;
+          font-weight: 700;
+        }
+
+        .sustansya-app-shell .sb-dashboard-welcome p {
+          font-family: 'DM Sans', sans-serif;
+        }
 
         /* =====================================
            APPLICATION SHELL
@@ -351,10 +348,8 @@ function App() {
           flex: 1;
           min-width: 0;
           min-height: 0;
-
           display: flex;
           flex-direction: column;
-
           padding: 12px 22px;
           overflow: hidden;
         }
@@ -382,51 +377,71 @@ function App() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-
           flex-shrink: 0;
           margin-bottom: 9px;
         }
-         /* Dashboard heading: slightly lower */
+
         .sb-dashboard-page-header {
-        padding-top: 12px;
-         }
+          padding-top: 12px;
+          margin-bottom: 22px;
+        }
 
         .sb-page-eyebrow {
           margin: 0 0 2px;
-
           font-size: 10px;
           font-weight: 700;
           letter-spacing: 1.4px;
-
           color: var(--muted);
         }
 
         .sb-page-title {
           margin: 0;
-
-          font-size: clamp(22px, 2vw, 28px);
+          font-size: clamp(25px, 2.15vw, 31px);
           font-weight: 700;
           line-height: 1.15;
-
           color: var(--text);
         }
+
+        /* =====================================
+           WELCOME HEADER
+           ===================================== */
+
+        .sb-dashboard-welcome {
+          margin: 0;
+          padding: 0;
+          min-height: 0;
+        }
+
+        .sb-dashboard-welcome h1 {
+          margin: 0 0 5px;
+          font-size: clamp(23px, 2.1vw, 31px);
+          font-weight: 700;
+          line-height: 1.2;
+          color: var(--primary);
+        }
+
+        .sb-dashboard-welcome p {
+          margin: 0;
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--muted);
+        }
+
+        /* =====================================
+           HEADER BUTTONS
+           ===================================== */
 
         .sb-theme-button {
           display: flex;
           align-items: center;
           justify-content: center;
-
           width: 42px;
           height: 42px;
-
           background: var(--surface);
           color: var(--text);
-
           border: 1px solid var(--border);
           border-radius: 12px;
-
           cursor: pointer;
-
           transition:
             transform 0.2s ease,
             background 0.2s ease;
@@ -436,52 +451,28 @@ function App() {
           transform: rotate(12deg);
         }
 
+        .sb-header-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+
         /* =====================================
-           BALANCED DASHBOARD LAYOUT
+           DASHBOARD LAYOUT
            ===================================== */
 
         .sb-dashboard {
           height: 100%;
           min-height: 0;
           min-width: 0;
-
           display: grid;
-
           grid-template-rows:
-            auto
-            minmax(295px, calc(43% + 20px))
+            minmax(280px, calc(40% + 20px))
             minmax(0, 1fr);
-
-          gap: 10px;
+          gap: 20px;
           overflow: hidden;
-        }
-
-        /* =====================================
-           WELCOME SECTION
-           ===================================== */
-
-        .sb-dashboard-welcome {
-          margin: 0;
-          padding: 0;
-          min-height: 0;
-        }
-
-        .sb-dashboard-welcome h2 {
-          margin: 0 0 3px;
-
-          font-size: clamp(15px, 1.4vw, 19px);
-          line-height: 1.2;
-
-          color: var(--primary);
-        }
-
-        .sb-dashboard-welcome p {
-          margin: 0;
-
-          font-size: 11px;
-          line-height: 1.35;
-
-          color: var(--muted);
         }
 
         /* =====================================
@@ -491,34 +482,27 @@ function App() {
         .sb-nutrition {
           display: flex;
           flex-direction: column;
-
           min-width: 0;
           min-height: 0;
-
-          gap: 7px;
+          gap: 12px;
         }
 
         .sb-section-heading {
           margin: 0;
-
-          font-size: clamp(14px, 1.25vw, 17px);
+          font-size: clamp(17px, 1.35vw, 20px);
           font-weight: 700;
           line-height: 1.2;
-
           color: var(--text);
           flex-shrink: 0;
         }
 
         .sb-nutrition-grid {
           display: grid;
-
           grid-template-columns:
             minmax(0, 1fr)
             minmax(0, 1fr);
-
           gap: 14px;
           flex: 1;
-
           min-width: 0;
           min-height: 0;
         }
@@ -529,52 +513,37 @@ function App() {
 
         .sb-calorie-area {
           display: flex;
-
           min-width: 0;
           min-height: 0;
-
           overflow: hidden;
         }
 
         .sb-calorie-area > * {
           width: 100%;
           height: 100%;
-
           min-width: 0;
           min-height: 0;
         }
 
-        /*
-          Do not resize the SVG separately.
-          The calorie ring and center labels
-          must retain their original geometry.
-        */
-
         /* =====================================
-           SUGAR AND SODIUM CARDS
+           SUGAR AND SODIUM
            ===================================== */
 
         .sb-nutrients-area {
           display: grid;
-
           grid-template-rows:
             minmax(0, 1fr)
             minmax(0, 1fr);
-
           gap: 12px;
-
           min-width: 0;
           min-height: 0;
         }
 
         .sb-nutrients-area > * {
           height: 100%;
-
           min-height: 0;
           min-width: 0;
-
           overflow: hidden;
-
           padding: 12px 18px !important;
         }
 
@@ -584,13 +553,12 @@ function App() {
         }
 
         /* =====================================
-           SMART LUNCHBOX OVERVIEW
+           SMART LUNCHBOX
            ===================================== */
 
         .sb-lunchbox-area {
           min-height: 0;
           min-width: 0;
-
           overflow: hidden;
         }
 
@@ -600,14 +568,13 @@ function App() {
         }
 
         /* =====================================
-           LARGE DESKTOP SCREENS
+           LARGE SCREENS
            ===================================== */
 
         @media (min-height: 1000px) {
           .sb-dashboard {
             grid-template-rows:
-              auto
-              minmax(330px, calc(42% + 20px))
+              minmax(315px, calc(40% + 20px))
               minmax(0, 1fr);
           }
 
@@ -617,7 +584,7 @@ function App() {
         }
 
         /* =====================================
-           SHORT DESKTOP SCREENS
+           SHORT SCREENS
            ===================================== */
 
         @media (max-height: 800px) {
@@ -626,20 +593,22 @@ function App() {
           }
 
           .sb-page-header {
-            margin-bottom: 5px;
+            margin-bottom: 10px;
+          }
+
+          .sb-dashboard-page-header {
+            margin-bottom: 12px;
           }
 
           .sb-dashboard {
             grid-template-rows:
-              auto
-              minmax(245px, calc(42% + 20px))
+              minmax(235px, calc(40% + 20px))
               minmax(0, 1fr);
-
-            gap: 6px;
+            gap: 12px;
           }
 
           .sb-nutrition {
-            gap: 4px;
+            gap: 8px;
           }
 
           .sb-nutrition-grid {
@@ -666,8 +635,7 @@ function App() {
         @media (max-height: 650px) {
           .sb-dashboard {
             grid-template-rows:
-              auto
-              minmax(220px, calc(43% + 20px))
+              minmax(210px, calc(40% + 20px))
               minmax(0, 1fr);
           }
 
@@ -689,13 +657,15 @@ function App() {
             overflow-y: auto;
           }
 
+          .sb-dashboard-page-header {
+            margin-bottom: 18px;
+          }
+
           .sb-dashboard {
             display: flex;
             flex-direction: column;
-
             height: auto;
             min-height: 100%;
-
             gap: 16px;
             overflow: visible;
           }
@@ -723,77 +693,142 @@ function App() {
           .sb-nutrients-area > * {
             padding: 18px !important;
           }
+
+          .sb-header-actions {
+            gap: 8px;
+          }
         }
+          
+
+/* =====================================
+   BALANCED NUTRITION CARD HEIGHTS
+   ===================================== */
+
+.sb-dashboard {
+  grid-template-rows: minmax(0, 48fr) minmax(0, 52fr);
+  gap: 14px;
+}
+
+.sb-nutrition {
+  gap: 9px;
+}
+
+.sb-nutrition-grid {
+  gap: 14px;
+}
+
+.sb-calorie-area > * {
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 12px;
+}
+
+.sb-nutrients-area {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sb-nutrients-area > * {
+  min-height: 0;
+  height: 100%;
+  padding: 12px 18px !important;
+  overflow: visible;
+}
+
+/* Shorter desktop screens */
+@media (max-height: 800px) and (min-width: 901px) {
+  .sb-dashboard {
+    grid-template-rows: minmax(0, 50fr) minmax(0, 50fr);
+  }
+
+  .sb-nutrients-area > * {
+    padding: 10px 14px !important;
+  }
+
+  .sb-lunchbox-scale {
+    zoom: 0.72;
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 900px) {
+  .sb-dashboard {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sb-calorie-area > *,
+  .sb-nutrients-area > * {
+    height: auto;
+  }
+}
 
       `}</style>
 
-      {/* =====================================
-          OPENING ANIMATION
-          ===================================== */}
-
+      {/* OPENING ANIMATION */}
       <AnimatePresence>
         {showOpening && (
           <OpeningAnimation
-            onComplete={() =>
-              setShowOpening(false)
-            }
+            onComplete={() => setShowOpening(false)}
           />
         )}
       </AnimatePresence>
 
-      {/* =====================================
-          SIDEBAR
-          ===================================== */}
-
+      {/* SIDEBAR */}
       <Sidebar
         activePage={activePage}
         onNavigate={handleNavigate}
       />
 
-      {/* =====================================
-          MAIN WORKSPACE
-          ===================================== */}
-          
-
+      {/* MAIN WORKSPACE */}
       <main className="sustansya-workspace">
+        <header
+          className={`sb-page-header ${
+            activePage === 'Dashboard'
+              ? 'sb-dashboard-page-header'
+              : ''
+          }`}
+        >
+       
+<div>
+  {activePage === 'Dashboard' ? (
+    <div className="sb-dashboard-welcome">
+      <h1 style={{ color: '#243D32' }}>
+        Welcome to SustansyaBox!
+      </h1>
+      <p>
+        Monitor your meals, track your nutrition, and stay connected
+        to your smart lunchbox.
+      </p>
+    </div>
+  ) : (
+    <h1 className="sb-page-title">
+      {activePage}
+    </h1>
+  )}
+</div>
 
-        {/* HEADER */}
 
-       <header
-  className={`sb-page-header ${
-    activePage === 'Dashboard'
-      ? 'sb-dashboard-page-header'
-      : ''
-  }`}
->
-          <div>
-            <p className="sb-page-eyebrow">
-              OVERVIEW
-            </p>
+          {/* HEADER BUTTONS */}
+          <div className="sb-header-actions">
+            <NotificationBell />
 
-            <h1 className="sb-page-title">
-              {activePage}
-            </h1>
+            <button
+              type="button"
+              className="sb-theme-button"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+            >
+              {darkMode ? (
+                <Sun size={20} />
+              ) : (
+                <Moon size={20} />
+              )}
+            </button>
           </div>
-
-          <button
-            type="button"
-            className="sb-theme-button"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-          >
-            {darkMode ? (
-              <Sun size={20} />
-            ) : (
-              <Moon size={20} />
-            )}
-          </button>
         </header>
 
-        {/* =====================================
-            PAGE CONTENT
-            ===================================== */}
-
+        {/* PAGE CONTENT */}
         <div
           className={`sustansya-content ${
             activePage === 'Dashboard'
@@ -801,42 +836,16 @@ function App() {
               : 'other-page-active'
           }`}
         >
-
-          {/* =====================================
-              DASHBOARD
-              ===================================== */}
-
+          {/* DASHBOARD */}
           {activePage === 'Dashboard' && (
             <div className="sb-dashboard">
-
-              {/* WELCOME */}
-
-              <section className="sb-dashboard-welcome">
-                <h2>
-                  Welcome to SustansyaBox!
-                </h2>
-
-                <p>
-                  Monitor your meals, track your
-                  nutrition, and stay connected
-                  to your smart lunchbox.
-                </p>
-              </section>
-
-              {/* =====================================
-                  TODAY'S NUTRITION
-                  ===================================== */}
-
+              {/* TODAY'S NUTRITION */}
               <section className="sb-nutrition">
-
                 <h2 className="sb-section-heading">
                   Today's Nutrition
                 </h2>
 
                 <div className="sb-nutrition-grid">
-
-                  {/* CALORIE RING */}
-
                   <div className="sb-calorie-area">
                     <CalorieRing
                       consumed={1250}
@@ -844,10 +853,7 @@ function App() {
                     />
                   </div>
 
-                  {/* SUGAR AND SODIUM */}
-
                   <div className="sb-nutrients-area">
-
                     <NutritionCard
                       title="Sugar Intake"
                       consumed={28}
@@ -865,28 +871,20 @@ function App() {
                       icon={Droplets}
                       color="#83A9A0"
                     />
-
                   </div>
                 </div>
               </section>
 
-              {/* =====================================
-                  SMART LUNCHBOX OVERVIEW
-                  ===================================== */}
-
+              {/* SMART LUNCHBOX OVERVIEW */}
               <section className="sb-lunchbox-area">
                 <div className="sb-lunchbox-scale">
                   <SmartLunchboxOverview />
                 </div>
               </section>
-
             </div>
           )}
 
-          {/* =====================================
-              SETTINGS
-              ===================================== */}
-
+          {/* SETTINGS */}
           {activePage === 'Settings' && (
             <UserProfile
               profile={profile}
@@ -897,54 +895,35 @@ function App() {
             />
           )}
 
-          {/* =====================================
-              SMART LUNCHBOX
-              ===================================== */}
-
+          {/* SMART LUNCHBOX */}
           {activePage === 'Smart Lunchbox' && (
             <SmartLunchbox />
           )}
 
-          {/* =====================================
-              MEAL HISTORY
-              ===================================== */}
-
+          {/* MEAL HISTORY */}
           {activePage === 'Meal History' && (
             <MealHistory />
           )}
 
-          {/* =====================================
-              MEAL PLANNER
-              ===================================== */}
-
+          {/* MEAL PLANNER */}
           {activePage === 'Meal Planner' && (
             <MealPlanner />
           )}
 
-          {/* =====================================
-              RECIPES
-              ===================================== */}
-
+          {/* RECIPES */}
           {activePage === 'Recipes' && (
             <Recipes />
           )}
 
-          {/* =====================================
-              NUTRITION REPORTS
-              ===================================== */}
-
+          {/* NUTRITION REPORTS */}
           {activePage === 'Nutrition Reports' && (
             <NutritionReports />
           )}
 
-          {/* =====================================
-              ABOUT US
-              ===================================== */}
-
+          {/* ABOUT US */}
           {activePage === 'About Us' && (
             <AboutUsPreview />
           )}
-
         </div>
       </main>
     </div>

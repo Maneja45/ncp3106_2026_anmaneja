@@ -33,6 +33,12 @@ type Meal = {
 type Filter = 'All Meals' | 'Today' | 'This Week' | 'This Month'
 type ModalMode = 'view' | 'edit' | 'delete'
 
+const FONT = {
+  heading: "Georgia, 'Times New Roman', serif",
+  body: "'DM Sans', sans-serif",
+  number: "'Manrope', sans-serif",
+}
+
 function dateOffset(days: number) {
   const date = new Date()
   date.setDate(date.getDate() - days)
@@ -149,12 +155,14 @@ const card: CSSProperties = {
   borderRadius: 18,
   padding: 16,
   minWidth: 0,
+  fontFamily: FONT.body,
 }
 
 const muted: CSSProperties = {
   color: 'var(--muted)',
   fontSize: 11,
   lineHeight: 1.5,
+  fontFamily: FONT.body,
 }
 
 const buttonBase: CSSProperties = {
@@ -170,6 +178,7 @@ const buttonBase: CSSProperties = {
   gap: 7,
   fontSize: 11,
   fontWeight: 700,
+  fontFamily: FONT.body,
 }
 
 const inputStyle: CSSProperties = {
@@ -181,6 +190,29 @@ const inputStyle: CSSProperties = {
   color: 'var(--text)',
   padding: 11,
   fontSize: 12,
+  fontFamily: FONT.body,
+}
+
+const headingStyle: CSSProperties = {
+  fontFamily: FONT.heading,
+  fontWeight: 700,
+  letterSpacing: '-0.5px',
+  color: 'var(--text)',
+}
+
+const numberStyle: CSSProperties = {
+  fontFamily: FONT.number,
+  fontWeight: 800,
+  fontVariantNumeric: 'tabular-nums',
+  color: 'var(--text)',
+}
+
+const eyebrowStyle: CSSProperties = {
+  fontFamily: FONT.number,
+  color: 'var(--primary)',
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 1.2,
 }
 
 function nutrition(meal: Meal) {
@@ -273,7 +305,7 @@ export default function MealHistory() {
       )
   }, [meals, search, filter])
 
-  // Keep the five-record display limit.
+  // Preserve the five-record display limit.
   const visibleMeals = filteredMeals.slice(0, 5)
 
   const totals = visibleMeals.reduce(
@@ -337,6 +369,7 @@ export default function MealHistory() {
 
   return (
     <motion.div
+      className="sb-meal-history"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -346,11 +379,27 @@ export default function MealHistory() {
         maxWidth: 1600,
         margin: '0 auto',
         boxSizing: 'border-box',
+        fontFamily: FONT.body,
       }}
     >
-      {/* THEME-AWARE ACTION BUTTON STYLES */}
+      {/* MEAL HISTORY TYPOGRAPHY AND ACTION STYLES */}
       <style>{`
-        .meal-action-btn {
+        .sb-meal-history {
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .sb-meal-history button,
+        .sb-meal-history input,
+        .sb-meal-history select {
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .sb-meal-history input::placeholder {
+          font-family: 'DM Sans', sans-serif;
+          color: var(--muted);
+        }
+
+        .sb-meal-history .meal-action-btn {
           --hover-text: #45634D;
           --hover-bg: #E6EFE5;
           --hover-border: #B8CEB7;
@@ -374,32 +423,31 @@ export default function MealHistory() {
             transform 0.2s ease;
         }
 
-        .meal-action-btn.view {
+        .sb-meal-history .meal-action-btn.view {
           --hover-text: #45634D;
           --hover-bg: #E6EFE5;
           --hover-border: #B8CEB7;
         }
 
-        .meal-action-btn.edit {
+        .sb-meal-history .meal-action-btn.edit {
           --hover-text: #A47736;
           --hover-bg: #FBF0DC;
           --hover-border: #E9D0A2;
         }
 
-        .meal-action-btn.delete {
+        .sb-meal-history .meal-action-btn.delete {
           --hover-text: #C94B4B;
           --hover-bg: #FDE9E9;
           --hover-border: #F0B8B8;
         }
 
-        /* DARK MODE: detect the existing dark theme */
         :is(
           [data-theme="dark"],
           [data-mode="dark"],
           .dark,
           .dark-mode,
           .theme-dark
-        ) .meal-action-btn.view {
+        ) .sb-meal-history .meal-action-btn.view {
           --hover-text: #B7D5B5;
           --hover-bg: #304B3B;
           --hover-border: #567A60;
@@ -411,7 +459,7 @@ export default function MealHistory() {
           .dark,
           .dark-mode,
           .theme-dark
-        ) .meal-action-btn.edit {
+        ) .sb-meal-history .meal-action-btn.edit {
           --hover-text: #F0CF8D;
           --hover-bg: #493C29;
           --hover-border: #80663B;
@@ -423,35 +471,35 @@ export default function MealHistory() {
           .dark,
           .dark-mode,
           .theme-dark
-        ) .meal-action-btn.delete {
+        ) .sb-meal-history .meal-action-btn.delete {
           --hover-text: #FFB4AF;
           --hover-bg: #4C2D30;
           --hover-border: #98535A;
         }
 
-        .meal-action-btn:hover {
+        .sb-meal-history .meal-action-btn:hover {
           background: var(--hover-bg);
           border-color: var(--hover-border);
           color: var(--hover-text);
           transform: translateY(-2px) scale(1.06);
         }
 
-        .meal-action-btn:active {
+        .sb-meal-history .meal-action-btn:active {
           transform: scale(0.95);
         }
 
-        .meal-action-btn:focus-visible {
+        .sb-meal-history .meal-action-btn:focus-visible {
           outline: 2px solid var(--primary);
           outline-offset: 3px;
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .meal-action-btn {
+          .sb-meal-history .meal-action-btn {
             transition: none;
           }
 
-          .meal-action-btn:hover,
-          .meal-action-btn:active {
+          .sb-meal-history .meal-action-btn:hover,
+          .sb-meal-history .meal-action-btn:active {
             transform: none;
           }
         }
@@ -471,17 +519,21 @@ export default function MealHistory() {
         <div>
           <p
             style={{
-              color: 'var(--primary)',
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: 1.2,
+              ...eyebrowStyle,
               margin: '0 0 5px',
             }}
           >
             YOUR NUTRITION JOURNEY
           </p>
 
-          <h2 style={{ fontSize: 23, margin: '0 0 5px' }}>
+          <h2
+            style={{
+              ...headingStyle,
+              fontSize: 26,
+              lineHeight: 1.2,
+              margin: '0 0 5px',
+            }}
+          >
             Every meal tells a story.
           </h2>
 
@@ -568,6 +620,7 @@ export default function MealHistory() {
 
               <strong
                 style={{
+                  ...numberStyle,
                   fontSize: 24,
                   letterSpacing: '-0.5px',
                 }}
@@ -578,6 +631,7 @@ export default function MealHistory() {
               <span
                 style={{
                   ...muted,
+                  fontFamily: FONT.number,
                   marginLeft: 5,
                 }}
               >
@@ -627,6 +681,7 @@ export default function MealHistory() {
               color: 'var(--text)',
               padding: '11px 0',
               fontSize: 12,
+              fontFamily: FONT.body,
             }}
           />
         </div>
@@ -691,7 +746,8 @@ export default function MealHistory() {
       >
         <h3
           style={{
-            fontSize: 16,
+            ...headingStyle,
+            fontSize: 19,
             margin: '0 0 10px',
           }}
         >
@@ -710,7 +766,8 @@ export default function MealHistory() {
 
             <h3
               style={{
-                color: 'var(--text)',
+                ...headingStyle,
+                fontSize: 19,
                 margin: '8px 0 5px',
               }}
             >
@@ -772,14 +829,22 @@ export default function MealHistory() {
                     <strong
                       style={{
                         display: 'block',
+                        fontFamily: FONT.body,
                         fontSize: 13,
+                        fontWeight: 700,
                         marginBottom: 3,
                       }}
                     >
                       {meal.food}
                     </strong>
 
-                    <p style={{ ...muted, margin: 0 }}>
+                    <p
+                      style={{
+                        ...muted,
+                        fontFamily: FONT.number,
+                        margin: 0,
+                      }}
+                    >
                       {formatDate(meal.date)} · {meal.time}
                     </p>
 
@@ -789,7 +854,14 @@ export default function MealHistory() {
                         margin: '2px 0 0',
                       }}
                     >
-                      Compartment {meal.compartment} · {meal.weight} g
+                      Compartment {meal.compartment} ·{' '}
+                      <span
+                        style={{
+                          fontFamily: FONT.number,
+                        }}
+                      >
+                        {meal.weight} g
+                      </span>
                     </p>
                   </div>
 
@@ -802,6 +874,7 @@ export default function MealHistory() {
                   >
                     <strong
                       style={{
+                        ...numberStyle,
                         display: 'block',
                         fontSize: 14,
                       }}
@@ -809,12 +882,17 @@ export default function MealHistory() {
                       {format(values.calories)} kcal
                     </strong>
 
-                    <span style={muted}>
+                    <span
+                      style={{
+                        ...muted,
+                        fontFamily: FONT.number,
+                      }}
+                    >
                       {format(values.sugar, 1)} g sugar
                     </span>
                   </div>
 
-                  {/* FIXED ACTION BUTTONS */}
+                  {/* ACTION BUTTONS */}
                   <div
                     style={{
                       display: 'flex',
@@ -902,6 +980,7 @@ export default function MealHistory() {
               borderRadius: 12,
               background: '#45634D',
               color: '#FFFFFF',
+              fontFamily: FONT.body,
               fontSize: 12,
             }}
           >
@@ -973,6 +1052,7 @@ export default function MealHistory() {
                 padding: 24,
                 boxSizing: 'border-box',
                 boxShadow: '0 25px 70px rgba(0,0,0,0.18)',
+                fontFamily: FONT.body,
               }}
             >
               {/* MODAL HEADER */}
@@ -988,8 +1068,7 @@ export default function MealHistory() {
                 <div>
                   <p
                     style={{
-                      ...muted,
-                      fontWeight: 800,
+                      ...eyebrowStyle,
                       margin: '0 0 6px',
                     }}
                   >
@@ -998,15 +1077,16 @@ export default function MealHistory() {
 
                   <h2
                     style={{
-                      fontSize: 21,
+                      ...headingStyle,
+                      fontSize: 23,
                       margin: 0,
                     }}
                   >
                     {modalMode === 'view'
                       ? 'Meal Details'
                       : modalMode === 'edit'
-                      ? 'Edit Meal'
-                      : 'Delete Meal?'}
+                        ? 'Edit Meal'
+                        : 'Delete Meal?'}
                   </h2>
                 </div>
 
@@ -1029,6 +1109,7 @@ export default function MealHistory() {
                   <p
                     style={{
                       color: 'var(--muted)',
+                      fontFamily: FONT.body,
                       fontSize: 13,
                       lineHeight: 1.7,
                     }}
@@ -1089,6 +1170,7 @@ export default function MealHistory() {
                     htmlFor="edit-food"
                     style={{
                       display: 'block',
+                      fontFamily: FONT.body,
                       fontSize: 12,
                       fontWeight: 700,
                       marginBottom: 7,
@@ -1113,6 +1195,7 @@ export default function MealHistory() {
                     htmlFor="edit-date"
                     style={{
                       display: 'block',
+                      fontFamily: FONT.body,
                       fontSize: 12,
                       fontWeight: 700,
                       marginBottom: 7,
@@ -1138,6 +1221,7 @@ export default function MealHistory() {
                     htmlFor="edit-compartment"
                     style={{
                       display: 'block',
+                      fontFamily: FONT.body,
                       fontSize: 12,
                       fontWeight: 700,
                       marginBottom: 7,
@@ -1228,6 +1312,8 @@ export default function MealHistory() {
 
                     <h3
                       style={{
+                        ...headingStyle,
+                        fontSize: 20,
                         margin: '8px 0 4px',
                       }}
                     >
@@ -1237,6 +1323,7 @@ export default function MealHistory() {
                     <p
                       style={{
                         ...muted,
+                        fontFamily: FONT.number,
                         margin: 0,
                       }}
                     >
@@ -1289,12 +1376,20 @@ export default function MealHistory() {
                       <span
                         style={{
                           color: 'var(--muted)',
+                          fontFamily: FONT.body,
                         }}
                       >
                         {label}
                       </span>
 
-                      <strong>{value}</strong>
+                      <strong
+                        style={{
+                          ...numberStyle,
+                          fontSize: 12,
+                        }}
+                      >
+                        {value}
+                      </strong>
                     </div>
                   ))}
 
