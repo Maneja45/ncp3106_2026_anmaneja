@@ -46,8 +46,8 @@ type DashboardPage =
 const PROFILE_STORAGE_KEY = 'sustansyabox_profile'
 
 const dashboardPages: DashboardPage[] = [
-  'Dashboard',
   'Smart Lunchbox',
+  'Dashboard',
   'Meal History',
   'Meal Planner',
   'Recipes',
@@ -55,6 +55,14 @@ const dashboardPages: DashboardPage[] = [
   'About Us',
   'Settings',
 ]
+
+// These are temporary frontend preview values.
+// Replace them with actual meal records when the backend is connected.
+const PREVIEW_NUTRITION = {
+  calories: 1250,
+  sugar: 28,
+  sodium: 1400,
+}
 
 function loadProfile(): ProfileData {
   try {
@@ -106,8 +114,9 @@ function App() {
   const [showOpening, setShowOpening] = useState(false)
 
   // NAVIGATION
+  // Smart Lunchbox remains the first page.
   const [activePage, setActivePage] =
-    useState<DashboardPage>('Dashboard')
+    useState<DashboardPage>('Smart Lunchbox')
 
   // PROFILE STORAGE
   useEffect(() => {
@@ -124,6 +133,12 @@ function App() {
   const handleSaveProfile = (updatedProfile: ProfileData) => {
     setProfile(updatedProfile)
   }
+
+  // NUTRITION GOALS
+  // These values are shared by the dashboard and notification bell.
+  const calorieGoal = Number(profile.calories)
+  const sugarGoal = Number(profile.sugar)
+  const sodiumGoal = Number(profile.sodium)
 
   // THEME
   const toggleTheme = () => {
@@ -144,7 +159,7 @@ function App() {
   ) => {
     if (!email || !password) return
 
-    setActivePage('Dashboard')
+    setActivePage('Smart Lunchbox')
     setShowOpening(true)
     setIsLoggedIn(true)
   }
@@ -698,71 +713,69 @@ function App() {
             gap: 8px;
           }
         }
-          
 
-/* =====================================
-   BALANCED NUTRITION CARD HEIGHTS
-   ===================================== */
+        /* =====================================
+           BALANCED NUTRITION CARD HEIGHTS
+           ===================================== */
 
-.sb-dashboard {
-  grid-template-rows: minmax(0, 48fr) minmax(0, 52fr);
-  gap: 14px;
-}
+        .sb-dashboard {
+          grid-template-rows: minmax(0, 48fr) minmax(0, 52fr);
+          gap: 14px;
+        }
 
-.sb-nutrition {
-  gap: 9px;
-}
+        .sb-nutrition {
+          gap: 9px;
+        }
 
-.sb-nutrition-grid {
-  gap: 14px;
-}
+        .sb-nutrition-grid {
+          gap: 14px;
+        }
 
-.sb-calorie-area > * {
-  height: 100%;
-  min-height: 0;
-  padding-bottom: 12px;
-}
+        .sb-calorie-area > * {
+          height: 100%;
+          min-height: 0;
+          padding-bottom: 12px;
+        }
 
-.sb-nutrients-area {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
+        .sb-nutrients-area {
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
 
-.sb-nutrients-area > * {
-  min-height: 0;
-  height: 100%;
-  padding: 12px 18px !important;
-  overflow: visible;
-}
+        .sb-nutrients-area > * {
+          min-height: 0;
+          height: 100%;
+          padding: 12px 18px !important;
+          overflow: visible;
+        }
 
-/* Shorter desktop screens */
-@media (max-height: 800px) and (min-width: 901px) {
-  .sb-dashboard {
-    grid-template-rows: minmax(0, 50fr) minmax(0, 50fr);
-  }
+        /* Shorter desktop screens */
+        @media (max-height: 800px) and (min-width: 901px) {
+          .sb-dashboard {
+            grid-template-rows: minmax(0, 50fr) minmax(0, 50fr);
+          }
 
-  .sb-nutrients-area > * {
-    padding: 10px 14px !important;
-  }
+          .sb-nutrients-area > * {
+            padding: 10px 14px !important;
+          }
 
-  .sb-lunchbox-scale {
-    zoom: 0.72;
-  }
-}
+          .sb-lunchbox-scale {
+            zoom: 0.72;
+          }
+        }
 
-/* Mobile layout */
-@media (max-width: 900px) {
-  .sb-dashboard {
-    display: flex;
-    flex-direction: column;
-  }
+        /* Mobile layout */
+        @media (max-width: 900px) {
+          .sb-dashboard {
+            display: flex;
+            flex-direction: column;
+          }
 
-  .sb-calorie-area > *,
-  .sb-nutrients-area > * {
-    height: auto;
-  }
-}
-
+          .sb-calorie-area > *,
+          .sb-nutrients-area > * {
+            height: auto;
+          }
+        }
       `}</style>
 
       {/* OPENING ANIMATION */}
@@ -789,30 +802,38 @@ function App() {
               : ''
           }`}
         >
-       
-<div>
-  {activePage === 'Dashboard' ? (
-    <div className="sb-dashboard-welcome">
-      <h1 style={{ color: '#243D32' }}>
-        Welcome to SustansyaBox!
-      </h1>
-      <p>
-        Monitor your meals, track your nutrition, and stay connected
-        to your smart lunchbox.
-      </p>
-    </div>
-  ) : (
-    <h1 className="sb-page-title">
-      {activePage}
-    </h1>
-  )}
-</div>
-
+          <div>
+            {activePage === 'Dashboard' ? (
+              <div className="sb-dashboard-welcome">
+                <h1 style={{ color: '#243D32' }}>
+                  Welcome to SustansyaBox!
+                </h1>
+                <p>
+                  Monitor your meals, track your nutrition, and stay connected
+                  to your smart lunchbox.
+                </p>
+              </div>
+            ) : (
+              <h1 className="sb-page-title">
+                {activePage}
+              </h1>
+            )}
+          </div>
 
           {/* HEADER BUTTONS */}
           <div className="sb-header-actions">
-            <NotificationBell />
 
+            {/* NUTRITION NOTIFICATIONS */}
+            <NotificationBell
+              caloriesConsumed={PREVIEW_NUTRITION.calories}
+              caloriesGoal={calorieGoal}
+              sugarConsumed={PREVIEW_NUTRITION.sugar}
+              sugarGoal={sugarGoal}
+              sodiumConsumed={PREVIEW_NUTRITION.sodium}
+              sodiumGoal={sodiumGoal}
+            />
+
+            {/* LIGHT / DARK MODE */}
             <button
               type="button"
               className="sb-theme-button"
@@ -848,16 +869,16 @@ function App() {
                 <div className="sb-nutrition-grid">
                   <div className="sb-calorie-area">
                     <CalorieRing
-                      consumed={1250}
-                      goal={Number(profile.calories)}
+                      consumed={PREVIEW_NUTRITION.calories}
+                      goal={calorieGoal}
                     />
                   </div>
 
                   <div className="sb-nutrients-area">
                     <NutritionCard
                       title="Sugar Intake"
-                      consumed={28}
-                      goal={Number(profile.sugar)}
+                      consumed={PREVIEW_NUTRITION.sugar}
+                      goal={sugarGoal}
                       unit="g"
                       icon={Candy}
                       color="#C58A63"
@@ -865,8 +886,8 @@ function App() {
 
                     <NutritionCard
                       title="Sodium Intake"
-                      consumed={1400}
-                      goal={Number(profile.sodium)}
+                      consumed={PREVIEW_NUTRITION.sodium}
+                      goal={sodiumGoal}
                       unit="mg"
                       icon={Droplets}
                       color="#83A9A0"
@@ -890,7 +911,7 @@ function App() {
               profile={profile}
               onSave={handleSaveProfile}
               onBack={() =>
-                setActivePage('Dashboard')
+                setActivePage('Smart Lunchbox')
               }
             />
           )}

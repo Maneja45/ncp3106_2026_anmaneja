@@ -14,9 +14,10 @@ import {
   UsersRound,
 } from 'lucide-react'
 
+// Smart Lunchbox is now the first navigation item.
 const navigation = [
-  { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Smart Lunchbox', icon: Scale },
+  { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Meal History', icon: History },
   { label: 'Meal Planner', icon: CalendarDays },
   { label: 'Recipes', icon: BookOpen },
@@ -31,7 +32,7 @@ type SidebarProps = {
 }
 
 export default function Sidebar({
-  activePage = 'Dashboard',
+  activePage = 'Smart Lunchbox',
   onNavigate,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
