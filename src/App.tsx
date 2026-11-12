@@ -56,8 +56,6 @@ const dashboardPages: DashboardPage[] = [
   'Settings',
 ]
 
-// These are temporary frontend preview values.
-// Replace them with actual meal records when the backend is connected.
 const PREVIEW_NUTRITION = {
   calories: 1250,
   sugar: 28,
@@ -113,8 +111,13 @@ function App() {
   const [darkMode, setDarkMode] = useState(false)
   const [showOpening, setShowOpening] = useState(false)
 
+  // DEVICE STATUS PREVIEW
+  // Replace with live device state when hardware is integrated.
+  const [deviceConnected, setDeviceConnected] = useState(false)
+  const batteryPercentage: number | null =
+    deviceConnected ? 85 : null
+
   // NAVIGATION
-  // Smart Lunchbox remains the first page.
   const [activePage, setActivePage] =
     useState<DashboardPage>('Smart Lunchbox')
 
@@ -134,8 +137,7 @@ function App() {
     setProfile(updatedProfile)
   }
 
-  // NUTRITION GOALS
-  // These values are shared by the dashboard and notification bell.
+  // SHARED NUTRITION GOALS
   const calorieGoal = Number(profile.calories)
   const sugarGoal = Number(profile.sugar)
   const sodiumGoal = Number(profile.sodium)
@@ -472,6 +474,66 @@ function App() {
           justify-content: flex-end;
           gap: 12px;
           flex-shrink: 0;
+        }
+
+        /* =====================================
+           DEVICE CONNECTION STATUS
+           ===================================== */
+
+        .sb-device-status {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 4px 0;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+          transition: color 0.2s ease;
+        }
+
+        .sb-device-status.is-connected {
+          color: #4FAD73;
+        }
+
+        .sb-device-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #9CA3AF;
+          flex-shrink: 0;
+          transition: background 0.2s ease;
+        }
+
+        .sb-device-status.is-connected .sb-device-dot {
+          background: #4FAD73;
+        }
+
+        /* =====================================
+           VERTICAL SIGNAL ICON
+           ===================================== */
+
+        .sb-signal-icon {
+          width: 20px;
+          height: 20px;
+          flex-shrink: 0;
+          display: block;
+        }
+
+        /* =====================================
+           COMPACT BATTERY ICON
+           ===================================== */
+
+        .sb-battery-icon {
+          width: 36px;
+          height: 22px;
+          flex-shrink: 0;
+          display: block;
+          color: var(--text);
         }
 
         /* =====================================
@@ -823,7 +885,100 @@ function App() {
           {/* HEADER BUTTONS */}
           <div className="sb-header-actions">
 
-            {/* NUTRITION NOTIFICATIONS */}
+            {/* CONNECTION STATUS */}
+            <button
+              type="button"
+              className={`sb-device-status ${
+                deviceConnected ? 'is-connected' : ''
+              }`}
+              onClick={() =>
+                setDeviceConnected((connected) => !connected)
+              }
+              aria-label={`Device ${
+                deviceConnected ? 'online' : 'offline'
+              }. Toggle preview status`}
+              title="Device connection preview — click to toggle"
+            >
+              <span
+                className="sb-device-dot"
+                aria-hidden="true"
+              />
+
+              <span>
+                {deviceConnected ? 'Online' : 'Offline'}
+              </span>
+            </button>
+
+            {/* VERTICAL SIGNAL BARS */}
+            <svg
+              className="sb-signal-icon"
+              viewBox="0 0 20 20"
+              aria-hidden="true"
+            >
+              {[5, 8, 12, 16].map((height, index) => (
+                <rect
+                  key={index}
+                  x={1 + index * 5}
+                  y={18 - height}
+                  width="3.4"
+                  height={height}
+                  rx="1"
+                  fill={
+                    deviceConnected
+                      ? '#4FAD73'
+                      : '#9CA3AF'
+                  }
+                />
+              ))}
+            </svg>
+
+            {/* SMALL BATTERY WITH PERCENTAGE INSIDE */}
+            <svg
+              className="sb-battery-icon"
+              viewBox="0 0 40 24"
+              role="img"
+              aria-label={
+                batteryPercentage === null
+                  ? 'Battery unavailable'
+                  : `Battery ${batteryPercentage}% (preview)`
+              }
+            >
+              <rect
+                x="1.5"
+                y="4"
+                width="33"
+                height="16"
+                rx="3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
+
+              <rect
+                x="36"
+                y="9"
+                width="2.5"
+                height="6"
+                rx="1"
+                fill="currentColor"
+              />
+
+              <text
+                x="18"
+                y="12.5"
+                fontSize="9"
+                fontWeight="700"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="currentColor"
+              >
+                {batteryPercentage === null
+                  ? '—'
+                  : `${batteryPercentage}%`}
+              </text>
+            </svg>
+
+            {/* NOTIFICATIONS */}
             <NotificationBell
               caloriesConsumed={PREVIEW_NUTRITION.calories}
               caloriesGoal={calorieGoal}
@@ -860,6 +1015,7 @@ function App() {
           {/* DASHBOARD */}
           {activePage === 'Dashboard' && (
             <div className="sb-dashboard">
+
               {/* TODAY'S NUTRITION */}
               <section className="sb-nutrition">
                 <h2 className="sb-section-heading">
