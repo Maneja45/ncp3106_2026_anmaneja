@@ -1,12 +1,9 @@
-
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Moon, Sun, Candy, Droplets } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 
 import Sidebar from './components/Sidebar'
-import CalorieRing from './components/CalorieRing'
-import NutritionCard from './components/NutritionCard'
-import SmartLunchboxOverview from './components/SmartLunchboxOverview'
+import Dashboard from './components/Dashboard'
 import SmartLunchbox from './SmartLunchbox'
 import MealHistory from './components/MealHistory'
 import MealPlanner from './components/MealPlanner'
@@ -23,6 +20,7 @@ import AboutUsPreview from './components/AboutUsPreview'
 import NotificationBell from './components/NotificationBell'
 
 import { initialProfile, type ProfileData } from './types/profile'
+import { sampleMeals, type Meal } from './types/meals'
 import './App.css'
 
 type AuthPage =
@@ -97,6 +95,7 @@ function loadProfile(): ProfileData {
 }
 
 function App() {
+  const [meals, setMeals] = useState<Meal[]>(sampleMeals)
   // PROFILE
   const [profile, setProfile] =
     useState<ProfileData>(loadProfile)
@@ -138,6 +137,7 @@ function App() {
   }
 
   // SHARED NUTRITION GOALS
+  // Saving in Settings updates profile state and these dashboard props.
   const calorieGoal = Number(profile.calories)
   const sugarGoal = Number(profile.sugar)
   const sodiumGoal = Number(profile.sodium)
@@ -731,7 +731,7 @@ function App() {
           }
 
           .sustansya-content.dashboard-active {
-            overflow-y: auto;
+            overflow: hidden;
           }
 
           .sb-dashboard-page-header {
@@ -1014,51 +1014,12 @@ function App() {
         >
           {/* DASHBOARD */}
           {activePage === 'Dashboard' && (
-            <div className="sb-dashboard">
-
-              {/* TODAY'S NUTRITION */}
-              <section className="sb-nutrition">
-                <h2 className="sb-section-heading">
-                  Today's Nutrition
-                </h2>
-
-                <div className="sb-nutrition-grid">
-                  <div className="sb-calorie-area">
-                    <CalorieRing
-                      consumed={PREVIEW_NUTRITION.calories}
-                      goal={calorieGoal}
-                    />
-                  </div>
-
-                  <div className="sb-nutrients-area">
-                    <NutritionCard
-                      title="Sugar Intake"
-                      consumed={PREVIEW_NUTRITION.sugar}
-                      goal={sugarGoal}
-                      unit="g"
-                      icon={Candy}
-                      color="#C58A63"
-                    />
-
-                    <NutritionCard
-                      title="Sodium Intake"
-                      consumed={PREVIEW_NUTRITION.sodium}
-                      goal={sodiumGoal}
-                      unit="mg"
-                      icon={Droplets}
-                      color="#83A9A0"
-                    />
-                  </div>
-                </div>
-              </section>
-
-              {/* SMART LUNCHBOX OVERVIEW */}
-              <section className="sb-lunchbox-area">
-                <div className="sb-lunchbox-scale">
-                  <SmartLunchboxOverview />
-                </div>
-              </section>
-            </div>
+            <Dashboard
+              calorieGoal={calorieGoal}
+              sugarGoal={sugarGoal}
+              sodiumGoal={sodiumGoal}
+              meals={meals}
+            />
           )}
 
           {/* SETTINGS */}
@@ -1079,7 +1040,7 @@ function App() {
 
           {/* MEAL HISTORY */}
           {activePage === 'Meal History' && (
-            <MealHistory />
+            <MealHistory meals={meals} setMeals={setMeals} />
           )}
 
           {/* MEAL PLANNER */}

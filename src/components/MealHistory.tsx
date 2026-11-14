@@ -1,5 +1,5 @@
 
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   CalendarDays,
@@ -16,19 +16,7 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react'
-
-type Meal = {
-  id: number
-  food: string
-  emoji: string
-  date: string
-  time: string
-  compartment: number
-  weight: number
-  caloriesPer100g: number
-  sugarPer100g: number
-  sodiumPer100g: number
-}
+import { type Meal, nutrition, dateOffset } from '../types/meals'
 
 type Filter = 'All Meals' | 'Today' | 'This Week' | 'This Month'
 type ModalMode = 'view' | 'edit' | 'delete'
@@ -38,116 +26,6 @@ const FONT = {
   body: "'DM Sans', sans-serif",
   number: "'Manrope', sans-serif",
 }
-
-function dateOffset(days: number) {
-  const date = new Date()
-  date.setDate(date.getDate() - days)
-
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-')
-}
-
-const sampleMeals: Meal[] = [
-  {
-    id: 1,
-    food: 'White Rice',
-    emoji: '🍚',
-    date: dateOffset(0),
-    time: '12:15 PM',
-    compartment: 1,
-    weight: 150,
-    caloriesPer100g: 130,
-    sugarPer100g: 0.1,
-    sodiumPer100g: 1,
-  },
-  {
-    id: 2,
-    food: 'Chicken Adobo',
-    emoji: '🍗',
-    date: dateOffset(0),
-    time: '12:15 PM',
-    compartment: 2,
-    weight: 120,
-    caloriesPer100g: 190,
-    sugarPer100g: 1.5,
-    sodiumPer100g: 600,
-  },
-  {
-    id: 3,
-    food: 'Steamed Broccoli',
-    emoji: '🥦',
-    date: dateOffset(0),
-    time: '12:15 PM',
-    compartment: 3,
-    weight: 80,
-    caloriesPer100g: 35,
-    sugarPer100g: 1.4,
-    sodiumPer100g: 33,
-  },
-  {
-    id: 4,
-    food: 'Brown Rice',
-    emoji: '🍚',
-    date: dateOffset(1),
-    time: '12:30 PM',
-    compartment: 1,
-    weight: 160,
-    caloriesPer100g: 123,
-    sugarPer100g: 0.4,
-    sodiumPer100g: 4,
-  },
-  {
-    id: 5,
-    food: 'Chicken Tinola',
-    emoji: '🍲',
-    date: dateOffset(1),
-    time: '12:30 PM',
-    compartment: 2,
-    weight: 180,
-    caloriesPer100g: 85,
-    sugarPer100g: 0.8,
-    sodiumPer100g: 280,
-  },
-  {
-    id: 6,
-    food: 'Banana',
-    emoji: '🍌',
-    date: dateOffset(2),
-    time: '10:10 AM',
-    compartment: 3,
-    weight: 100,
-    caloriesPer100g: 89,
-    sugarPer100g: 12.2,
-    sodiumPer100g: 1,
-  },
-  {
-    id: 7,
-    food: 'Sinigang',
-    emoji: '🥣',
-    date: dateOffset(5),
-    time: '1:05 PM',
-    compartment: 2,
-    weight: 200,
-    caloriesPer100g: 75,
-    sugarPer100g: 1.2,
-    sodiumPer100g: 350,
-  },
-  {
-    id: 8,
-    food: 'Boiled Egg',
-    emoji: '🥚',
-    date: dateOffset(10),
-    time: '8:20 AM',
-    compartment: 1,
-    weight: 55,
-    caloriesPer100g: 155,
-    sugarPer100g: 1.1,
-    sodiumPer100g: 124,
-  },
-]
 
 const card: CSSProperties = {
   background: 'var(--surface)',
@@ -215,16 +93,6 @@ const eyebrowStyle: CSSProperties = {
   letterSpacing: 1.2,
 }
 
-function nutrition(meal: Meal) {
-  const factor = meal.weight / 100
-
-  return {
-    calories: meal.caloriesPer100g * factor,
-    sugar: meal.sugarPer100g * factor,
-    sodium: meal.sodiumPer100g * factor,
-  }
-}
-
 function format(value: number, digits = 0) {
   return value.toLocaleString(undefined, {
     maximumFractionDigits: digits,
@@ -281,8 +149,12 @@ function mealTimestamp(meal: Meal) {
   ).getTime()
 }
 
-export default function MealHistory() {
-  const [meals, setMeals] = useState<Meal[]>(sampleMeals)
+type MealHistoryProps = {
+  meals: Meal[]
+  setMeals: Dispatch<SetStateAction<Meal[]>>
+}
+
+export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('All Meals')
   const [modalMode, setModalMode] = useState<ModalMode | null>(null)

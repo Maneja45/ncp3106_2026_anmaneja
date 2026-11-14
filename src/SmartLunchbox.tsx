@@ -1157,7 +1157,7 @@ export default function SmartLunchbox() {
       <header className="smart-header">
         <div className="smart-header-copy">
           <p className="smart-eyebrow">
-            YOUR SMART LUNCHBOX
+            ----------------------
           </p>
 
           <h2 className="smart-title">
