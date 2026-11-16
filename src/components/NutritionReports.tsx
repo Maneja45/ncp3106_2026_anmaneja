@@ -198,6 +198,10 @@ return (
     gap: 12px;
   }
 
+  .reports-insight-panel {
+    min-height: 205px;
+  }
+
   .reports-action-button {
     transition:
       background-color 0.2s ease,
@@ -812,9 +816,10 @@ return (
       <div className="reports-insights-grid">
         {/* GOAL OVERVIEW */}
         <motion.section
+          className="reports-insight-panel"
           style={{
             ...panel,
-            padding: '14px 17px',
+            padding: '18px 20px',
           }}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -825,8 +830,8 @@ return (
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              margin: '0 0 9px',
-              fontSize: 15,
+              margin: '0 0 12px',
+              fontSize: 17,
             }}
           >
             <BarChart3
@@ -849,20 +854,20 @@ return (
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   gap: 10,
-                  padding: '8px 0',
+                  padding: '10px 0',
                   borderBottom:
                     '1px solid var(--border)',
                 }}
               >
                 <div>
-                  <strong style={{ fontSize: 12 }}>
+                  <strong style={{ fontSize: 13 }}>
                     {config.title}
                   </strong>
 
                   <p
                     style={{
                       margin: '3px 0 0',
-                      fontSize: 10,
+                      fontSize: 11,
                       color: 'var(--muted)',
                     }}
                   >
@@ -876,7 +881,7 @@ return (
                     display: 'flex',
                     alignItems: 'center',
                     gap: 5,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
                     color:
@@ -903,9 +908,10 @@ return (
 
         {/* NUTRITION NOTES */}
         <motion.section
+          className="reports-insight-panel"
           style={{
             ...panel,
-            padding: '14px 17px',
+            padding: '18px 20px',
           }}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -916,8 +922,8 @@ return (
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              margin: '0 0 9px',
-              fontSize: 15,
+              margin: '0 0 12px',
+              fontSize: 17,
             }}
           >
             <Info size={17} color="var(--primary)" />
@@ -928,8 +934,8 @@ return (
             style={{
               color: 'var(--muted)',
               lineHeight: 1.55,
-              fontSize: 12,
-              margin: '0 0 11px',
+              fontSize: 13,
+              margin: '0 0 14px',
             }}
           >
             These reports help you observe your meal
@@ -942,11 +948,11 @@ return (
             style={{
               background: 'var(--bg)',
               border: '1px solid var(--border)',
-              padding: '10px 12px',
+              padding: '13px 15px',
               borderRadius: 11,
             }}
           >
-            <strong style={{ fontSize: 12 }}>
+            <strong style={{ fontSize: 13 }}>
               Sample Data Preview
             </strong>
 
@@ -954,7 +960,7 @@ return (
               style={{
                 color: 'var(--muted)',
                 lineHeight: 1.5,
-                fontSize: 11,
+                fontSize: 12,
                 margin: '5px 0 0',
               }}
             >

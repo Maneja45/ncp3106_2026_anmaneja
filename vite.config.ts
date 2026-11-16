@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: isGitHub
         ? 'dist'
-        : 'C:/xampp/HTDOCS/htdocs/SustansyaBox/frontend',
+        : 'C:/xampp/htdocs/SustansyaBox/frontend',
 
       emptyOutDir: true,
     },
