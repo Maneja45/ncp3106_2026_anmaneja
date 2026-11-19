@@ -1,6 +1,5 @@
-
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Check,
   CheckCircle2,
@@ -15,73 +14,163 @@ import {
   Wifi,
   WifiOff,
   X,
-} from "lucide-react";
+} from 'lucide-react'
 
-/* =========================================================
-   TYPES
-========================================================= */
+// ============================================
+// TYPES
+// ============================================
 
 type Food = {
-  id: string;
-  name: string;
-  category: string;
-  calories: number;
-  sugar: number;
-  sodium: number;
-  emoji: string;
-};
+  id: string
+  name: string
+  category: string
+  calories: number
+  sugar: number
+  sodium: number
+  emoji: string
+}
 
 type Compartment = {
-  id: number;
-  food: Food | null;
-  weight: number;
-};
+  id: number
+  food: Food | null
+  weight: number
+}
 
 type Nutrition = {
-  calories: number;
-  sugar: number;
-  sodium: number;
-};
+  calories: number
+  sugar: number
+  sodium: number
+}
 
 type NutritionTotals = Nutrition & {
-  weight: number;
-};
+  weight: number
+}
 
-/* =========================================================
-   FOOD CATALOG
-   Estimated values per 100 grams
-========================================================= */
+type SmartLunchboxProps = {
+  deviceOnline: boolean
+  liveWeight: number | null
+  sensorReady: boolean
+}
+
+// ============================================
+// FOOD CATALOG
+// Estimated nutrition per 100 grams
+// ============================================
 
 const foods: Food[] = [
-  { id: "rice", name: "White Rice", category: "Rice & Grains", calories: 130, sugar: 0.1, sodium: 1, emoji: "🍚" },
-  { id: "brown-rice", name: "Brown Rice", category: "Rice & Grains", calories: 123, sugar: 0.4, sodium: 4, emoji: "🍚" },
-  { id: "adobo", name: "Chicken Adobo", category: "Filipino Dishes", calories: 190, sugar: 1.5, sodium: 600, emoji: "🍗" },
-  { id: "tinola", name: "Chicken Tinola", category: "Filipino Dishes", calories: 85, sugar: 0.8, sodium: 280, emoji: "🍲" },
-  { id: "sinigang", name: "Sinigang", category: "Filipino Dishes", calories: 75, sugar: 1.2, sodium: 350, emoji: "🥣" },
-  { id: "egg", name: "Boiled Egg", category: "Protein", calories: 155, sugar: 1.1, sodium: 124, emoji: "🥚" },
-  { id: "broccoli", name: "Steamed Broccoli", category: "Vegetables", calories: 35, sugar: 1.4, sodium: 33, emoji: "🥦" },
-  { id: "carrots", name: "Steamed Carrots", category: "Vegetables", calories: 35, sugar: 3.5, sodium: 58, emoji: "🥕" },
-  { id: "banana", name: "Banana", category: "Fruits", calories: 89, sugar: 12.2, sodium: 1, emoji: "🍌" },
-  { id: "apple", name: "Apple", category: "Fruits", calories: 52, sugar: 10.4, sodium: 1, emoji: "🍎" },
-];
+  {
+    id: 'rice',
+    name: 'White Rice',
+    category: 'Rice & Grains',
+    calories: 130,
+    sugar: 0.1,
+    sodium: 1,
+    emoji: '🍚',
+  },
+  {
+    id: 'brown-rice',
+    name: 'Brown Rice',
+    category: 'Rice & Grains',
+    calories: 123,
+    sugar: 0.4,
+    sodium: 4,
+    emoji: '🍚',
+  },
+  {
+    id: 'adobo',
+    name: 'Chicken Adobo',
+    category: 'Filipino Dishes',
+    calories: 190,
+    sugar: 1.5,
+    sodium: 600,
+    emoji: '🍗',
+  },
+  {
+    id: 'tinola',
+    name: 'Chicken Tinola',
+    category: 'Filipino Dishes',
+    calories: 85,
+    sugar: 0.8,
+    sodium: 280,
+    emoji: '🍲',
+  },
+  {
+    id: 'sinigang',
+    name: 'Sinigang',
+    category: 'Filipino Dishes',
+    calories: 75,
+    sugar: 1.2,
+    sodium: 350,
+    emoji: '🥣',
+  },
+  {
+    id: 'egg',
+    name: 'Boiled Egg',
+    category: 'Protein',
+    calories: 155,
+    sugar: 1.1,
+    sodium: 124,
+    emoji: '🥚',
+  },
+  {
+    id: 'broccoli',
+    name: 'Steamed Broccoli',
+    category: 'Vegetables',
+    calories: 35,
+    sugar: 1.4,
+    sodium: 33,
+    emoji: '🥦',
+  },
+  {
+    id: 'carrots',
+    name: 'Steamed Carrots',
+    category: 'Vegetables',
+    calories: 35,
+    sugar: 3.5,
+    sodium: 58,
+    emoji: '🥕',
+  },
+  {
+    id: 'banana',
+    name: 'Banana',
+    category: 'Fruits',
+    calories: 89,
+    sugar: 12.2,
+    sodium: 1,
+    emoji: '🍌',
+  },
+  {
+    id: 'apple',
+    name: 'Apple',
+    category: 'Fruits',
+    calories: 52,
+    sugar: 10.4,
+    sodium: 1,
+    emoji: '🍎',
+  },
+]
+
+// ============================================
+// HELPERS
+// ============================================
 
 const emptyCompartments = (): Compartment[] => [
   { id: 1, food: null, weight: 0 },
   { id: 2, food: null, weight: 0 },
   { id: 3, food: null, weight: 0 },
-];
+]
 
 function calculateNutrition(
   food: Food,
   weight: number
 ): Nutrition {
-  const multiplier = weight / 100;
+  const multiplier = weight / 100
 
   return {
     calories: food.calories * multiplier,
     sugar: food.sugar * multiplier,
     sodium: food.sodium * multiplier,
-  };
+  }
 }
 
 function formatNumber(
@@ -90,192 +179,273 @@ function formatNumber(
 ): string {
   return value.toLocaleString(undefined, {
     maximumFractionDigits: decimals,
-  });
+  })
 }
 
-/* =========================================================
-   MAIN COMPONENT
-========================================================= */
+// ============================================
+// MAIN COMPONENT
+// ============================================
 
-export default function SmartLunchbox() {
+export default function SmartLunchbox({
+  deviceOnline,
+  liveWeight,
+  sensorReady,
+}: SmartLunchboxProps) {
+
+  // ==========================================
+  // STATE
+  // ==========================================
+
   const [compartments, setCompartments] =
-    useState<Compartment[]>(emptyCompartments);
+    useState<Compartment[]>(emptyCompartments)
 
   const [activeCompartment, setActiveCompartment] =
-    useState<number | null>(null);
+    useState<number | null>(null)
 
   const [selectedFood, setSelectedFood] =
-    useState<Food | null>(null);
+    useState<Food | null>(null)
 
-  const [search, setSearch] = useState("");
-  const [demoWeight, setDemoWeight] = useState(150);
-  const [demoConnected, setDemoConnected] = useState(false);
-  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
-  const [notification, setNotification] = useState("");
+  const [portionWeight, setPortionWeight] =
+    useState<number>(150)
 
-  const deviceMenuRef = useRef<HTMLDivElement>(null);
+  const [search, setSearch] =
+    useState<string>('')
 
-  /* =========================================================
-     CALCULATIONS
-  ========================================================= */
+  const [deviceMenuOpen, setDeviceMenuOpen] =
+    useState<boolean>(false)
+
+  const [notification, setNotification] =
+    useState<string>('')
+
+  const deviceMenuRef =
+    useRef<HTMLDivElement>(null)
+
+  // ==========================================
+  // REAL ESP32 SENSOR
+  // ==========================================
+
+  const hasValidWeight =
+    deviceOnline &&
+    sensorReady &&
+    typeof liveWeight === 'number' &&
+    Number.isFinite(liveWeight)
+
+  const displayedWeight =
+    hasValidWeight && liveWeight !== null
+      ? `${liveWeight.toFixed(1)} g`
+      : '-- g'
+
+  const sensorStatus = !deviceOnline
+    ? 'Sensor disconnected'
+    : !hasValidWeight
+      ? 'Sensor not ready'
+      : 'Sensor connected'
+
+  // ==========================================
+  // CALCULATIONS
+  // ==========================================
 
   const filledCount = compartments.filter(
     (item) => item.food !== null
-  ).length;
+  ).length
 
-  const totals: NutritionTotals = compartments.reduce(
-    (total, compartment) => {
-      if (!compartment.food) return total;
+  const totals: NutritionTotals =
+    compartments.reduce<NutritionTotals>(
+      (total, compartment) => {
+        if (!compartment.food) return total
 
-      const nutrition = calculateNutrition(
-        compartment.food,
-        compartment.weight
-      );
+        const nutrition = calculateNutrition(
+          compartment.food,
+          compartment.weight
+        )
 
-      return {
-        calories: total.calories + nutrition.calories,
-        sugar: total.sugar + nutrition.sugar,
-        sodium: total.sodium + nutrition.sodium,
-        weight: total.weight + compartment.weight,
-      };
-    },
-    {
-      calories: 0,
-      sugar: 0,
-      sodium: 0,
-      weight: 0,
-    }
-  );
+        return {
+          calories:
+            total.calories + nutrition.calories,
+
+          sugar:
+            total.sugar + nutrition.sugar,
+
+          sodium:
+            total.sodium + nutrition.sodium,
+
+          weight:
+            total.weight + compartment.weight,
+        }
+      },
+      {
+        calories: 0,
+        sugar: 0,
+        sodium: 0,
+        weight: 0,
+      }
+    )
 
   const filteredFoods = foods.filter((food) =>
     `${food.name} ${food.category}`
       .toLowerCase()
       .includes(search.trim().toLowerCase())
-  );
+  )
 
   const selectedNutrition = selectedFood
-    ? calculateNutrition(selectedFood, demoWeight)
-    : null;
+    ? calculateNutrition(
+        selectedFood,
+        portionWeight
+      )
+    : null
 
-  /* =========================================================
-     EFFECTS
-  ========================================================= */
+  // ==========================================
+  // EFFECTS
+  // ==========================================
 
   useEffect(() => {
-    if (!deviceMenuOpen) return;
+    if (!deviceMenuOpen) return
 
-    const handleOutsideClick = (event: MouseEvent) => {
+    const handleOutsideClick = (
+      event: MouseEvent
+    ): void => {
       if (
         deviceMenuRef.current &&
-        !deviceMenuRef.current.contains(event.target as Node)
+        !deviceMenuRef.current.contains(
+          event.target as Node
+        )
       ) {
-        setDeviceMenuOpen(false);
+        setDeviceMenuOpen(false)
       }
-    };
+    }
 
     document.addEventListener(
-      "mousedown",
+      'mousedown',
       handleOutsideClick
-    );
+    )
 
     return () => {
       document.removeEventListener(
-        "mousedown",
+        'mousedown',
         handleOutsideClick
-      );
-    };
-  }, [deviceMenuOpen]);
+      )
+    }
+  }, [deviceMenuOpen])
 
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActiveCompartment(null);
-        setSelectedFood(null);
-        setDeviceMenuOpen(false);
+    const handleEscape = (
+      event: KeyboardEvent
+    ): void => {
+      if (event.key === 'Escape') {
+        setActiveCompartment(null)
+        setSelectedFood(null)
+        setDeviceMenuOpen(false)
       }
-    };
+    }
 
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener(
+      'keydown',
+      handleEscape
+    )
 
     return () => {
       document.removeEventListener(
-        "keydown",
+        'keydown',
         handleEscape
-      );
-    };
-  }, []);
+      )
+    }
+  }, [])
 
   useEffect(() => {
-    if (!notification) return;
+    if (!notification) return
 
     const timer = window.setTimeout(() => {
-      setNotification("");
-    }, 3500);
+      setNotification('')
+    }, 3500)
 
-    return () => window.clearTimeout(timer);
-  }, [notification]);
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [notification])
 
-  /* =========================================================
-     ACTIONS
-  ========================================================= */
+  // ==========================================
+  // ACTIONS
+  // ==========================================
 
   const openPicker = (id: number): void => {
     const compartment = compartments.find(
       (item) => item.id === id
-    );
+    )
 
-    setActiveCompartment(id);
-    setSelectedFood(compartment?.food ?? null);
-    setDemoWeight(compartment?.weight || 150);
-    setSearch("");
-  };
+    setActiveCompartment(id)
+    setSelectedFood(compartment?.food ?? null)
+    setPortionWeight(compartment?.weight || 150)
+    setSearch('')
+    setDeviceMenuOpen(false)
+  }
 
   const closePicker = (): void => {
-    setActiveCompartment(null);
-    setSelectedFood(null);
-  };
+    setActiveCompartment(null)
+    setSelectedFood(null)
+    setSearch('')
+  }
 
   const saveFood = (): void => {
-    if (activeCompartment === null || !selectedFood) {
-      return;
+    if (
+      activeCompartment === null ||
+      !selectedFood ||
+      !Number.isFinite(portionWeight) ||
+      portionWeight <= 0
+    ) {
+      return
     }
 
-    const id = activeCompartment;
-    const food = selectedFood;
-    const weight = demoWeight;
+    const id = activeCompartment
+    const food = selectedFood
+    const weight = portionWeight
 
     setCompartments((previous) =>
       previous.map((compartment) =>
         compartment.id === id
-          ? { ...compartment, food, weight }
+          ? {
+              ...compartment,
+              food,
+              weight,
+            }
           : compartment
       )
-    );
+    )
 
-    closePicker();
-    setNotification(`Food saved to Compartment ${id}.`);
-  };
+    closePicker()
 
-  const clearCompartment = (id: number): void => {
+    setNotification(
+      `Food saved to Compartment ${id}.`
+    )
+  }
+
+  const clearCompartment = (
+    id: number
+  ): void => {
     setCompartments((previous) =>
       previous.map((compartment) =>
         compartment.id === id
-          ? { ...compartment, food: null, weight: 0 }
+          ? {
+              ...compartment,
+              food: null,
+              weight: 0,
+            }
           : compartment
       )
-    );
+    )
 
-    setNotification(`Compartment ${id} cleared.`);
-  };
+    setNotification(
+      `Compartment ${id} cleared.`
+    )
+  }
 
   const clearAll = (): void => {
-    setCompartments(emptyCompartments());
-    setNotification("Lunchbox preview cleared.");
-  };
+    setCompartments(emptyCompartments())
+    setNotification('Lunchbox cleared.')
+  }
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
+  // ==========================================
+  // RENDER
+  // ==========================================
 
   return (
     <motion.div
@@ -285,9 +455,10 @@ export default function SmartLunchbox() {
       transition={{ duration: 0.3 }}
     >
       <style>{`
-        /* =================================================
+
+        /* ====================================
            BASE
-        ================================================= */
+        ==================================== */
 
         .smart-page,
         .smart-page * {
@@ -305,15 +476,19 @@ export default function SmartLunchbox() {
 
           width: 100%;
           height: 100%;
+
           min-width: 0;
           min-height: 0;
 
+          flex: 1 1 0;
+
           display: flex;
           flex-direction: column;
-          gap: 12px;
 
-          padding: 0 4px 8px;
-          overflow: auto;
+          gap: 12px;
+          padding: 0;
+
+          overflow: hidden;
 
           color: var(--sb-text);
           font-family: "DM Sans", sans-serif;
@@ -333,26 +508,21 @@ export default function SmartLunchbox() {
           outline-offset: 2px;
         }
 
-        .smart-card {
-          min-width: 0;
-          min-height: 0;
-
-          background: var(--sb-surface);
-          border: 1px solid var(--sb-border);
-          border-radius: 19px;
-        }
-
         .smart-muted {
           margin: 0;
-          color: var(--sb-muted);
           font-size: 11px;
           line-height: 1.4;
+          color: var(--sb-muted);
         }
 
         .smart-title,
         .smart-panel-title,
         .smart-modal-title {
-          font-family: Georgia, "Times New Roman", serif;
+          font-family:
+            Georgia,
+            "Times New Roman",
+            serif;
+
           letter-spacing: -0.6px;
         }
 
@@ -360,8 +530,8 @@ export default function SmartLunchbox() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
 
+          gap: 6px;
           padding: 8px 11px;
 
           border: 1px solid var(--sb-border);
@@ -374,8 +544,8 @@ export default function SmartLunchbox() {
           font-weight: 750;
 
           transition:
-            background 0.2s ease,
-            transform 0.2s ease;
+            background 0.2s,
+            transform 0.2s;
         }
 
         .smart-button:hover {
@@ -383,9 +553,9 @@ export default function SmartLunchbox() {
         }
 
         .smart-button-primary {
+          color: white;
           background: var(--sb-green);
           border-color: var(--sb-green);
-          color: #ffffff;
         }
 
         .smart-button-primary:hover {
@@ -395,21 +565,22 @@ export default function SmartLunchbox() {
         .smart-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+          transform: none;
         }
 
-        /* =================================================
-           HEADER
-        ================================================= */
+        /* ====================================
+           PAGE HEADER
+        ==================================== */
 
         .smart-header {
-          flex: 0 0 auto;
-
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 14px;
 
-          padding: 2px 4px 4px;
+          flex: 0 0 auto;
+
+          gap: 14px;
+          padding: 0 3px;
 
           position: relative;
           z-index: 20;
@@ -417,6 +588,7 @@ export default function SmartLunchbox() {
 
         .smart-eyebrow {
           margin: 0 0 4px;
+
           color: var(--sb-green);
 
           font-size: 10px;
@@ -425,14 +597,15 @@ export default function SmartLunchbox() {
         }
 
         .smart-title {
-          margin: 0 0 5px;
-          font-size: clamp(23px, 2vw, 30px);
+          margin: 0 0 4px;
+
+          font-size: clamp(20px, 2vw, 29px);
           line-height: 1.1;
         }
 
-        /* =================================================
-           DEVICE CONNECTION
-        ================================================= */
+        /* ====================================
+           REAL DEVICE CONNECTION
+        ==================================== */
 
         .smart-device-wrap {
           position: relative;
@@ -442,10 +615,9 @@ export default function SmartLunchbox() {
         .smart-device-trigger {
           display: flex;
           align-items: center;
-          gap: 9px;
 
-          min-height: 40px;
-          padding: 9px 12px;
+          gap: 8px;
+          padding: 10px 12px;
 
           border: 1px solid var(--sb-border);
           border-radius: 12px;
@@ -455,6 +627,7 @@ export default function SmartLunchbox() {
 
           font-size: 11px;
           font-weight: 750;
+          white-space: nowrap;
         }
 
         .smart-device-dropdown {
@@ -467,9 +640,10 @@ export default function SmartLunchbox() {
 
           padding: 17px;
 
-          background: var(--sb-surface);
           border: 1px solid var(--sb-border);
           border-radius: 18px;
+
+          background: var(--sb-surface);
 
           box-shadow:
             0 20px 55px rgba(20, 38, 26, 0.16);
@@ -481,6 +655,7 @@ export default function SmartLunchbox() {
           display: flex;
           align-items: center;
           justify-content: space-between;
+
           gap: 12px;
           margin-bottom: 14px;
         }
@@ -488,14 +663,14 @@ export default function SmartLunchbox() {
         .smart-device-status {
           display: inline-flex;
           align-items: center;
+
           gap: 7px;
-
           padding: 7px 10px;
+
           border-radius: 99px;
-
           background: var(--sb-background);
-          color: var(--sb-muted);
 
+          color: var(--sb-muted);
           font-size: 10px;
           font-weight: 750;
         }
@@ -503,6 +678,7 @@ export default function SmartLunchbox() {
         .smart-status-dot {
           width: 7px;
           height: 7px;
+
           border-radius: 50%;
           background: #bd5252;
         }
@@ -513,21 +689,26 @@ export default function SmartLunchbox() {
 
         .smart-device-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+
           gap: 11px;
         }
 
         .smart-device-tile {
-          min-height: 145px;
+          min-width: 0;
+          min-height: 140px;
 
           display: flex;
           flex-direction: column;
-          gap: 8px;
 
+          gap: 8px;
           padding: 13px;
 
           border: 1px solid var(--sb-border);
           border-radius: 13px;
+
           background: var(--sb-background);
         }
 
@@ -535,43 +716,133 @@ export default function SmartLunchbox() {
           display: flex;
           align-items: center;
           justify-content: space-between;
+
           color: var(--sb-green);
         }
 
         .smart-device-value {
-          font-size: 26px;
+          font-size: 25px;
           font-weight: 850;
+          font-variant-numeric: tabular-nums;
         }
 
         .smart-device-footer {
           display: flex;
           align-items: center;
           justify-content: space-between;
+
           gap: 10px;
           margin-top: 14px;
         }
 
-        /* =================================================
-           MAIN LAYOUT
+        /* ====================================
+           SINGLE MAIN CONTAINER
+        ==================================== */
 
-           TOP: Taller lunchbox
-           BOTTOM: Two equal cards
-        ================================================= */
-
-        .smart-layout {
-          flex: 1 1 auto;
-          min-width: 0;
+        .smart-page .smart-layout {
           width: 100%;
 
+          flex: 1 1 0;
+
+          min-width: 0;
+          min-height: 0;
+
           display: grid;
+
           grid-template-columns:
-            repeat(2, minmax(0, 1fr));
+            minmax(0, 55fr)
+            minmax(0, 45fr);
 
           grid-template-rows:
-            minmax(460px, 1.5fr)
-            minmax(250px, 1fr);
+            minmax(0, 1fr);
 
-          gap: 13px;
+          gap: 12px;
+          padding: 12px;
+
+          border: 1px solid var(--sb-border);
+          border-radius: 22px;
+
+          background: var(--sb-surface);
+
+          overflow: hidden;
+        }
+
+        /* ====================================
+           LEFT LUNCHBOX PANEL
+
+           NO EXTRA WHITE CONTAINER
+           TITLE OUTSIDE GREEN BACKGROUND
+        ==================================== */
+
+        .smart-page .smart-lunchbox-panel {
+          grid-column: 1;
+          grid-row: 1;
+
+          min-width: 0;
+          min-height: 0;
+
+          display: flex;
+          flex-direction: column;
+
+          gap: 11px;
+
+          padding: 0;
+
+          border: none;
+          border-radius: 0;
+
+          background: transparent;
+
+          box-shadow: none;
+
+          overflow: hidden;
+        }
+
+        /* ====================================
+           LUNCHBOX TITLE AND DESCRIPTION
+
+           OUTSIDE THE GREEN BACKGROUND
+        ==================================== */
+
+        .smart-page .smart-lunchbox-panel
+        .smart-panel-heading {
+          flex: 0 0 auto;
+
+          padding: 8px 5px 1px;
+          margin: 0;
+
+          border: none;
+          background: transparent;
+        }
+
+        /* ====================================
+           RIGHT COLUMN
+        ==================================== */
+
+        .smart-right-column {
+          min-width: 0;
+          min-height: 0;
+
+          display: grid;
+
+          grid-template-columns:
+            minmax(0, 1fr);
+
+          grid-template-rows:
+            minmax(0, 45fr)
+            minmax(0, 55fr);
+
+          gap: 12px;
+        }
+
+        .smart-card {
+          min-width: 0;
+          min-height: 0;
+
+          background: var(--sb-surface);
+
+          border: 1px solid var(--sb-border);
+          border-radius: 17px;
         }
 
         .smart-panel {
@@ -580,88 +851,90 @@ export default function SmartLunchbox() {
 
           display: flex;
           flex-direction: column;
-          gap: 10px;
 
-          padding: 15px 18px;
+          gap: 9px;
+          padding: 13px;
+
           overflow: hidden;
         }
 
         .smart-panel-heading {
-          flex: 0 0 auto;
-
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+
+          flex-shrink: 0;
+
+          gap: 8px;
         }
 
         .smart-panel-title {
-          margin: 0 0 4px;
+          margin: 0 0 3px;
 
-          font-size: clamp(19px, 1.5vw, 24px);
-          line-height: 1.15;
+          font-size:
+            clamp(17px, 1.45vw, 23px);
+
+          line-height: 1.1;
         }
 
         .smart-panel-subtitle {
           margin: 0;
+
           color: var(--sb-muted);
 
-          font-size: 11px;
+          font-size: 10px;
           line-height: 1.4;
         }
 
         .smart-panel-icon {
-          flex-shrink: 0;
+          width: 30px;
+          height: 30px;
 
-          width: 34px;
-          height: 34px;
+          flex-shrink: 0;
 
           display: grid;
           place-items: center;
 
-          border-radius: 10px;
+          border-radius: 9px;
 
           background: var(--sb-background);
           color: var(--sb-green);
         }
 
-        /* =================================================
-           TALLER LUNCHBOX SECTION
-        ================================================= */
+        /* ====================================
+           GREEN LUNCHBOX BACKGROUND
 
-        .smart-lunchbox-panel {
-          grid-column: 1 / -1;
+           ONLY THE ACTUAL LUNCHBOX IS INSIDE
+        ==================================== */
 
-          padding: 15px 18px 12px;
-          gap: 10px;
-        }
-
-        .smart-lunchbox-stage {
-          flex: 1 1 auto;
+        .smart-page .smart-lunchbox-stage {
+          flex: 1 1 0;
 
           width: 100%;
+
           min-width: 0;
           min-height: 0;
 
           display: flex;
-          align-items: center;
+          align-items: stretch;
           justify-content: center;
 
-          padding: 16px 28px;
+          padding: clamp(12px, 1.6vw, 25px);
 
-          background: #e9ecdf;
+          background: #e7ecdf;
+
+          border: none;
           border-radius: 17px;
+
           overflow: hidden;
         }
 
-        /* =================================================
-           ACTUAL LUNCHBOX
-
-           Increased height and balanced width.
-        ================================================= */
+        /* ====================================
+           LARGE GREEN LUNCHBOX FRAME
+        ==================================== */
 
         .smart-lunchbox-shell {
-          width: min(100%, 1080px);
+          width: 100%;
           height: 100%;
 
           min-width: 0;
@@ -670,29 +943,27 @@ export default function SmartLunchbox() {
           display: grid;
 
           grid-template-columns:
-            minmax(0, 1.08fr)
-            minmax(0, 1fr);
+            repeat(2, minmax(0, 1fr));
 
           grid-template-rows:
             repeat(2, minmax(0, 1fr));
 
           gap: 11px;
+          padding: 11px;
 
-          padding: 10px;
-
-          border: 6px solid #82977c;
-          border-radius: 25px;
+          border: 7px solid #82977c;
+          border-radius: 27px;
 
           background: #aebfa7;
 
           box-shadow:
-            0 12px 25px rgba(55, 80, 58, 0.12),
-            inset 0 2px 5px rgba(0, 0, 0, 0.05);
+            inset 0 2px 6px rgba(0, 0, 0, 0.07),
+            0 10px 25px rgba(65, 88, 58, 0.13);
         }
 
-        /* =================================================
-           COMPARTMENTS
-        ================================================= */
+        /* ====================================
+           THREE LUNCHBOX COMPARTMENTS
+        ==================================== */
 
         .smart-compartment-button {
           position: relative;
@@ -701,58 +972,83 @@ export default function SmartLunchbox() {
           min-height: 0;
 
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          flex-direction: column;
 
-          padding: 15px;
+          gap: 9px;
+          padding: 14px;
 
           border: 2px solid #d5dfcf;
-          border-radius: 16px;
+          border-radius: 18px;
 
           background: #faf8f0;
           color: #344e41;
 
+          overflow: hidden;
+
           transition:
-            background 0.2s ease,
-            border-color 0.2s ease,
-            box-shadow 0.2s ease;
+            background 0.2s,
+            border-color 0.2s,
+            box-shadow 0.2s;
+        }
+
+        .smart-compartment-button:first-child {
+          grid-row: 1 / 3;
+          grid-column: 1;
+        }
+
+        .smart-compartment-button:nth-child(2) {
+          grid-row: 1;
+          grid-column: 2;
+        }
+
+        .smart-compartment-button:nth-child(3) {
+          grid-row: 2;
+          grid-column: 2;
         }
 
         .smart-compartment-button:hover {
           background: #fffdf7;
           border-color: #88a58a;
-          box-shadow: inset 0 0 0 1px #88a58a;
+
+          box-shadow:
+            inset 0 0 0 1px #88a58a;
         }
 
         .smart-compartment-number {
           position: absolute;
-          top: 14px;
-          left: 16px;
+
+          top: 12px;
+          left: 13px;
 
           color: #809184;
+
           font-size: 12px;
           font-weight: 850;
         }
 
         .smart-compartment-plus {
-          width: 40px;
-          height: 40px;
+          width: clamp(26px, 2.8vw, 44px);
+          height: clamp(26px, 2.8vw, 44px);
 
           color: #81977d;
-          stroke-width: 1.8;
+          stroke-width: 1.7;
         }
 
         .smart-compartment-emoji {
-          font-size: clamp(35px, 3vw, 52px);
+          font-size:
+            clamp(25px, 3.6vw, 58px);
+
           line-height: 1;
         }
 
         .smart-compartment-name {
           max-width: 100%;
 
-          font-size: clamp(15px, 1.25vw, 20px);
+          font-size:
+            clamp(12px, 1.4vw, 21px);
+
           font-weight: 800;
           line-height: 1.2;
 
@@ -761,49 +1057,67 @@ export default function SmartLunchbox() {
         }
 
         .smart-compartment-weight {
+          font-size:
+            clamp(10px, 1vw, 14px);
+
           color: #7a8d7f;
-          font-size: 12px;
           text-align: center;
         }
 
-        .smart-info-line {
-          flex: 0 0 auto;
+        /* ====================================
+           BOTTOM LUNCHBOX DESCRIPTION
 
+           OUTSIDE THE GREEN BACKGROUND
+        ==================================== */
+
+        .smart-info-line {
           display: flex;
           align-items: center;
-          gap: 7px;
+
+          flex-shrink: 0;
+
+          gap: 6px;
+          padding: 0 5px 5px;
 
           color: var(--sb-muted);
+
           font-size: 10px;
-          line-height: 1.3;
+          line-height: 1.4;
+
+          background: transparent;
         }
 
-        /* =================================================
-           NUTRITION CARD
-        ================================================= */
+        .smart-info-line svg {
+          flex-shrink: 0;
+        }
+
+        /* ====================================
+           NUTRITION PANEL
+        ==================================== */
 
         .smart-nutrition-content {
-          flex: 1 1 auto;
+          flex: 1 1 0;
           min-height: 0;
 
           display: flex;
           flex-direction: column;
-          gap: 9px;
+
+          gap: 7px;
         }
 
         .smart-calorie-box {
-          flex: 1 1 auto;
-          min-height: 80px;
+          flex: 1 1 0;
+          min-height: 55px;
 
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
+          flex-direction: column;
+
           gap: 4px;
+          padding: 8px;
 
-          padding: 10px;
-
-          border-radius: 13px;
+          border-radius: 12px;
           background: var(--sb-background);
 
           text-align: center;
@@ -811,9 +1125,9 @@ export default function SmartLunchbox() {
 
         .smart-calorie-label {
           margin: 0;
-
           color: var(--sb-muted);
-          font-size: 10px;
+
+          font-size: 9px;
           font-weight: 800;
           letter-spacing: 0.7px;
         }
@@ -821,26 +1135,29 @@ export default function SmartLunchbox() {
         .smart-calorie-value {
           color: var(--sb-green);
 
-          font-size: clamp(29px, 2.5vw, 39px);
+          font-size:
+            clamp(27px, 2.6vw, 39px);
+
           font-weight: 850;
-          line-height: 1.05;
+          line-height: 1.1;
 
           font-variant-numeric: tabular-nums;
         }
 
         .smart-calorie-unit {
-          margin-left: 5px;
-          font-size: 12px;
-          font-weight: 700;
+          margin-left: 4px;
+          font-size: 11px;
         }
 
         .smart-nutrition-stats {
-          flex: 0 0 auto;
+          flex-shrink: 0;
 
           display: grid;
+
           grid-template-columns:
             repeat(3, minmax(0, 1fr));
-          gap: 8px;
+
+          gap: 6px;
         }
 
         .smart-nutrition-stat {
@@ -848,55 +1165,62 @@ export default function SmartLunchbox() {
 
           display: flex;
           flex-direction: column;
-          gap: 5px;
 
-          padding: 10px;
+          gap: 4px;
+          padding: 8px;
 
           border: 1px solid var(--sb-border);
-          border-radius: 11px;
+          border-radius: 10px;
         }
 
         .smart-nutrition-stat-label {
           display: flex;
           align-items: center;
-          gap: 5px;
+
+          gap: 4px;
 
           color: var(--sb-muted);
-          font-size: 10px;
+          font-size: 9px;
         }
 
         .smart-nutrition-stat-value {
-          font-size: clamp(14px, 1.1vw, 18px);
           font-weight: 800;
+
+          font-size:
+            clamp(12px, 1.1vw, 17px);
         }
 
         .smart-nutrition-footer {
-          flex: 0 0 auto;
+          flex-shrink: 0;
 
           display: flex;
           align-items: center;
           justify-content: space-between;
+
           gap: 8px;
         }
 
         .smart-nutrition-footer .smart-muted {
-          max-width: 65%;
+          max-width: 62%;
           font-size: 9px;
           text-align: right;
         }
 
-        /* =================================================
+        /* ====================================
            COMPARTMENT DETAILS
-        ================================================= */
+        ==================================== */
 
         .smart-details-grid {
-          flex: 1 1 auto;
+          flex: 1 1 0;
+
           min-height: 0;
 
           display: grid;
+
           grid-template-columns:
             repeat(3, minmax(0, 1fr));
-          gap: 9px;
+
+          gap: 7px;
         }
 
         .smart-detail-card {
@@ -905,9 +1229,9 @@ export default function SmartLunchbox() {
 
           display: flex;
           flex-direction: column;
-          gap: 7px;
 
-          padding: 10px;
+          gap: 6px;
+          padding: 8px;
 
           border: 1px solid var(--sb-border);
           border-radius: 12px;
@@ -916,21 +1240,22 @@ export default function SmartLunchbox() {
         }
 
         .smart-detail-header {
-          flex: 0 0 auto;
-
           display: flex;
           flex-direction: column;
           align-items: flex-start;
+
           gap: 4px;
+          flex-shrink: 0;
         }
 
         .smart-detail-name {
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 800;
         }
 
         .smart-detail-badge {
           padding: 3px 7px;
+
           border-radius: 99px;
 
           background: var(--sb-surface);
@@ -946,25 +1271,28 @@ export default function SmartLunchbox() {
         }
 
         .smart-detail-food {
-          flex: 1 1 auto;
+          flex: 1 1 0;
+
           min-height: 0;
 
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
+          flex-direction: column;
+
           gap: 5px;
+          padding: 6px;
 
-          padding: 7px;
-
-          border-radius: 10px;
+          border-radius: 9px;
           background: var(--sb-surface);
 
           text-align: center;
         }
 
         .smart-detail-emoji {
-          font-size: clamp(22px, 2vw, 29px);
+          font-size:
+            clamp(20px, 2vw, 32px);
+
           line-height: 1;
         }
 
@@ -972,44 +1300,59 @@ export default function SmartLunchbox() {
           font-size: 11px;
           font-weight: 800;
           line-height: 1.2;
+
           overflow-wrap: anywhere;
         }
 
         .smart-detail-food-meta {
-          color: var(--sb-muted);
           font-size: 10px;
-          line-height: 1.2;
+          line-height: 1.25;
+
+          color: var(--sb-muted);
         }
 
         .smart-detail-actions {
-          flex: 0 0 auto;
-
           display: flex;
-          flex-wrap: wrap;
-          gap: 5px;
+          align-items: center;
+
+          flex-shrink: 0;
+          gap: 4px;
         }
 
         .smart-detail-actions .smart-button {
+          min-width: 0;
           flex: 1;
-          padding: 7px 6px;
+
+          padding: 7px 4px;
+
           font-size: 10px;
           white-space: nowrap;
         }
 
-        /* =================================================
-           MODAL
-        ================================================= */
+        .smart-detail-actions
+        .smart-remove-button {
+          flex: 0 0 auto;
+
+          color: #b96060;
+          padding: 7px;
+        }
+
+        /* ====================================
+           FOOD PICKER MODAL
+        ==================================== */
 
         .smart-modal-backdrop {
           position: fixed;
           inset: 0;
-          z-index: 200;
+
+          z-index: 1000;
 
           display: flex;
           align-items: center;
           justify-content: center;
 
           padding: 16px;
+
           background: rgba(20, 32, 25, 0.56);
         }
 
@@ -1019,6 +1362,7 @@ export default function SmartLunchbox() {
           max-height: 90dvh;
 
           overflow-y: auto;
+
           padding: 22px;
 
           border: 1px solid var(--sb-border);
@@ -1035,105 +1379,107 @@ export default function SmartLunchbox() {
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
+
           gap: 12px;
-          margin-bottom: 16px;
+          margin-bottom: 15px;
         }
 
         .smart-modal-label {
           margin: 0 0 6px;
 
           color: var(--sb-green);
+
           font-size: 10px;
           font-weight: 850;
           letter-spacing: 1px;
         }
 
         .smart-modal-title {
-          margin: 0 0 6px;
+          margin: 0 0 5px;
           font-size: 24px;
         }
 
         .smart-sensor-preview {
           display: flex;
           align-items: center;
+
           gap: 12px;
-
           padding: 13px;
-          margin-bottom: 13px;
 
-          border-radius: 13px;
+          margin-bottom: 12px;
+
+          border-radius: 12px;
           background: var(--sb-background);
         }
 
         .smart-sensor-icon {
-          width: 43px;
-          height: 43px;
+          width: 40px;
+          height: 40px;
+
           flex-shrink: 0;
 
           display: grid;
           place-items: center;
 
-          border-radius: 12px;
-          background: var(--sb-surface);
+          border-radius: 10px;
+
+          background: #e1ebdf;
           color: var(--sb-green);
         }
 
-        .smart-simulator {
-          padding: 13px;
+        .smart-portion-input {
           margin-bottom: 13px;
+          padding: 12px;
 
-          border: 1px dashed var(--sb-border);
-          border-radius: 13px;
+          border: 1px solid var(--sb-border);
+          border-radius: 12px;
         }
 
-        .smart-simulator-header {
+        .smart-portion-heading {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
-          margin-bottom: 12px;
+
+          gap: 8px;
+          margin-bottom: 10px;
         }
 
-        .smart-simulator-range {
-          width: 100%;
-          accent-color: #45634d;
-          cursor: pointer;
-        }
+        .smart-weight-input {
+          width: 100px;
+          padding: 8px;
 
-        .smart-range-labels {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 5px;
+          border: 1px solid var(--sb-border);
+          border-radius: 8px;
 
-          color: var(--sb-muted);
-          font-size: 10px;
+          background: var(--sb-surface);
+          color: var(--sb-text);
+
+          font-size: 13px;
+          font-weight: 700;
         }
 
         .smart-search-box {
           display: flex;
           align-items: center;
-          gap: 9px;
 
-          padding: 0 12px;
-          margin-bottom: 12px;
+          gap: 8px;
+          padding: 10px;
 
           border: 1px solid var(--sb-border);
-          border-radius: 12px;
+          border-radius: 10px;
 
-          background: var(--sb-background);
+          margin-bottom: 10px;
         }
 
         .smart-search-input {
           flex: 1;
           min-width: 0;
 
-          padding: 12px 0;
-
           border: 0;
-          outline: 0;
+          outline: none;
 
-          background: transparent;
           color: var(--sb-text);
+          background: transparent;
 
           font-size: 12px;
         }
@@ -1141,11 +1487,13 @@ export default function SmartLunchbox() {
         .smart-food-list {
           display: flex;
           flex-direction: column;
-          gap: 8px;
 
-          max-height: 185px;
+          gap: 6px;
+
+          max-height: 240px;
           overflow-y: auto;
-          margin-bottom: 13px;
+
+          padding: 2px;
         }
 
         .smart-food-option {
@@ -1153,295 +1501,296 @@ export default function SmartLunchbox() {
 
           display: flex;
           align-items: center;
-          gap: 11px;
 
-          padding: 10px 12px;
-          text-align: left;
+          gap: 10px;
+          padding: 10px;
 
           border: 1px solid var(--sb-border);
-          border-radius: 12px;
+          border-radius: 11px;
 
           background: var(--sb-surface);
           color: var(--sb-text);
+
+          text-align: left;
         }
 
+        .smart-food-option:hover,
         .smart-food-option.selected {
-          border-color: #81967a;
-          box-shadow: inset 0 0 0 1px #81967a;
+          border-color: #8cae90;
           background: var(--sb-background);
         }
 
-        .smart-selected-nutrition {
-          padding: 13px;
-          margin-bottom: 14px;
+        .smart-selected-summary {
+          padding: 12px;
+          margin-top: 12px;
 
-          border-radius: 13px;
+          border-radius: 11px;
           background: var(--sb-background);
         }
 
-        .smart-selected-grid {
+        .smart-selected-stats {
           display: grid;
+
           grid-template-columns:
             repeat(3, minmax(0, 1fr));
-          gap: 8px;
-        }
 
-        .smart-selected-stat {
-          min-width: 0;
-          padding: 10px;
-
-          text-align: center;
-          border-radius: 10px;
-
-          background: var(--sb-surface);
-        }
-
-        .smart-modal-actions {
-          display: flex;
           gap: 10px;
+          margin-top: 9px;
         }
 
-        .smart-modal-actions .smart-button {
-          flex: 1;
-          padding: 11px;
-          font-size: 12px;
+        .smart-modal-footer {
+          display: flex;
+          justify-content: flex-end;
+
+          gap: 8px;
+          margin-top: 15px;
         }
 
-        /* =================================================
-           TOAST
-        ================================================= */
+        /* ====================================
+           NOTIFICATION
+        ==================================== */
 
         .smart-toast {
           position: fixed;
-          right: 22px;
-          bottom: 22px;
-          z-index: 300;
+          bottom: 20px;
+          right: 20px;
+
+          z-index: 1100;
 
           display: flex;
           align-items: center;
-          gap: 10px;
 
-          max-width: 350px;
-          padding: 13px 15px;
+          gap: 8px;
+          padding: 12px 16px;
 
-          border-radius: 13px;
+          border-radius: 12px;
 
-          background: var(--sb-green);
-          color: #ffffff;
-
-          box-shadow:
-            0 12px 35px rgba(0, 0, 0, 0.15);
+          background: #45634d;
+          color: white;
 
           font-size: 12px;
-          font-weight: 650;
+          font-weight: 700;
+
+          box-shadow:
+            0 10px 30px rgba(0, 0, 0, 0.15);
         }
 
-        /* =================================================
-           SHORTER DESKTOP SCREENS
+        /* ====================================
+           SHORT DESKTOP SCREENS
+           KEEP SINGLE SCREEN LAYOUT
+        ==================================== */
 
-           Scale the top panel to available space
-           while protecting the bottom cards.
-        ================================================= */
+        @media (min-width: 951px)
+          and (max-height: 800px) {
 
-        @media (min-width: 951px) and (max-height: 900px) {
-          .smart-layout {
-            grid-template-rows:
-              minmax(340px, 1.5fr)
-              minmax(220px, 1fr);
+          .smart-page {
+            gap: 8px;
           }
 
-          .smart-lunchbox-stage {
-            padding: 10px 20px;
+          .smart-page .smart-layout {
+            padding: 9px;
+            gap: 9px;
+          }
+
+          .smart-page .smart-lunchbox-panel {
+            padding: 0;
+            gap: 8px;
+          }
+
+          .smart-page .smart-lunchbox-panel
+          .smart-panel-heading {
+            padding: 5px 4px 0;
+          }
+
+          .smart-page .smart-lunchbox-stage {
+            padding: 12px;
+            border-radius: 13px;
+          }
+
+          .smart-right-column {
+            gap: 9px;
           }
 
           .smart-panel {
-            padding: 12px 15px;
+            padding: 10px;
+            gap: 6px;
           }
 
-          .smart-detail-card {
-            padding: 8px;
-          }
-        }
-
-        @media (min-width: 951px) and (max-height: 700px) {
-          .smart-layout {
-            grid-template-rows:
-              minmax(300px, 1.4fr)
-              minmax(200px, 1fr);
-          }
-
-          .smart-panel {
-            gap: 7px;
+          .smart-lunchbox-shell {
+            padding: 9px;
+            gap: 9px;
+            border-width: 6px;
+            border-radius: 23px;
           }
 
           .smart-panel-title {
             font-size: 19px;
           }
 
-          .smart-lunchbox-stage {
-            padding: 8px 18px;
+          .smart-panel-icon {
+            width: 26px;
+            height: 26px;
           }
 
-          .smart-lunchbox-shell {
-            padding: 7px;
-            border-width: 5px;
-            gap: 8px;
+          .smart-detail-card {
+            padding: 5px;
+            gap: 4px;
+          }
+
+          .smart-detail-food {
+            gap: 3px;
+            padding: 4px;
+          }
+
+          .smart-nutrition-stat {
+            padding: 6px;
+          }
+
+          .smart-nutrition-footer
+          .smart-button {
+            padding: 5px 8px;
+          }
+
+          .smart-detail-actions
+          .smart-button {
+            padding: 5px 3px;
           }
 
           .smart-compartment-button {
-            gap: 4px;
+            gap: 6px;
             padding: 8px;
+          }
+
+          .smart-info-line {
+            font-size: 9px;
+            padding-bottom: 3px;
           }
         }
 
-        /* =================================================
-           TABLET
-        ================================================= */
+        /* ====================================
+           TABLET / SMALL SCREEN FALLBACK
+        ==================================== */
 
-        @media (max-width: 950px) {
+        @media (max-width: 950px),
+          (max-height: 560px) {
+
           .smart-page {
             height: auto;
-            min-height: 100%;
             overflow: visible;
           }
 
-          .smart-layout {
+          .smart-page .smart-layout {
             flex: none;
+
             grid-template-columns: 1fr;
             grid-template-rows: auto;
-            gap: 14px;
+
+            overflow: visible;
           }
 
-          .smart-lunchbox-panel {
+          .smart-page .smart-lunchbox-panel {
             grid-column: 1;
+            grid-row: auto;
+
+            min-height: 440px;
+            padding: 0;
           }
 
-          .smart-lunchbox-stage {
-            flex: none;
-            height: 440px;
-            padding: 16px;
+          .smart-page .smart-lunchbox-stage {
+            min-height: 340px;
           }
 
           .smart-lunchbox-shell {
-            max-width: 780px;
+            min-height: 310px;
           }
 
-          .smart-calorie-box {
-            min-height: 110px;
+          .smart-right-column {
+            grid-template-rows: auto auto;
           }
 
-          .smart-details-grid {
-            min-height: 200px;
+          .smart-nutrition-panel {
+            min-height: 240px;
+          }
+
+          .smart-details-panel {
+            min-height: 260px;
           }
         }
 
-        /* =================================================
-           MOBILE
-        ================================================= */
-
         @media (max-width: 600px) {
-          .smart-page {
-            padding: 0 0 20px;
-          }
 
           .smart-header {
+            align-items: flex-start;
             flex-wrap: wrap;
           }
 
-          .smart-device-wrap {
-            margin-left: auto;
+          .smart-page .smart-layout {
+            gap: 10px;
+            padding: 8px;
           }
 
-          .smart-panel {
-            padding: 14px;
+          .smart-page .smart-lunchbox-panel {
+            min-height: 370px;
+
+            padding: 0;
+            gap: 8px;
           }
 
-          .smart-lunchbox-stage {
-            height: 360px;
+          .smart-page .smart-lunchbox-panel
+          .smart-panel-heading {
+            padding: 5px 3px 0;
+          }
+
+          .smart-page .smart-lunchbox-stage {
+            min-height: 275px;
             padding: 10px;
           }
 
           .smart-lunchbox-shell {
-            padding: 6px;
-            border-width: 4px;
-            border-radius: 17px;
-            gap: 6px;
+            min-height: 255px;
+
+            border-width: 5px;
+            padding: 8px;
+            gap: 7px;
+
+            border-radius: 20px;
           }
 
           .smart-compartment-button {
             padding: 6px;
-            gap: 5px;
-            border-radius: 10px;
+            border-radius: 12px;
           }
 
-          .smart-compartment-number {
-            top: 8px;
-            left: 9px;
-            font-size: 10px;
+          .smart-device-dropdown {
+            width: min(420px, calc(100vw - 40px));
+
+            left: 0;
+            right: auto;
           }
 
-          .smart-compartment-plus {
-            width: 27px;
-            height: 27px;
+          .smart-detail-actions {
+            flex-wrap: wrap;
           }
 
-          .smart-compartment-emoji {
-            font-size: 27px;
+          .smart-detail-actions
+          .smart-button {
+            white-space: normal;
           }
 
-          .smart-compartment-name {
-            font-size: 12px;
-          }
-
-          .smart-compartment-weight {
-            font-size: 10px;
-          }
-
-          .smart-details-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .smart-detail-card {
-            min-height: 145px;
-          }
-
-          .smart-detail-header {
-            flex-direction: row;
-            align-items: center;
-            justify-content: space-between;
-          }
-
-          .smart-detail-food {
-            min-height: 65px;
-          }
-
-          .smart-nutrition-stats {
-            gap: 6px;
-          }
-
-          .smart-nutrition-stat {
-            padding: 8px;
-          }
-
-          .smart-nutrition-footer {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-
-          .smart-nutrition-footer .smart-muted {
-            max-width: 100%;
-            text-align: left;
+          .smart-panel {
+            padding: 9px;
           }
 
           .smart-modal {
             padding: 16px;
           }
         }
+
       `}</style>
 
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* ====================================
+          PAGE HEADER
+      ==================================== */}
 
       <header className="smart-header">
         <div>
@@ -1454,12 +1803,14 @@ export default function SmartLunchbox() {
           </h2>
 
           <p className="smart-muted">
-            Explore your three food compartments
-            and preview their nutrition.
+            Manage your compartments and monitor
+            your BiteWise device.
           </p>
         </div>
 
-        {/* CONNECTION DROPDOWN */}
+        {/* ==================================
+            DEVICE CONNECTION
+        ================================== */}
 
         <div
           className="smart-device-wrap"
@@ -1470,32 +1821,33 @@ export default function SmartLunchbox() {
             className="smart-device-trigger"
             aria-expanded={deviceMenuOpen}
             onClick={() =>
-              setDeviceMenuOpen((previous) => !previous)
+              setDeviceMenuOpen(
+                (previous) => !previous
+              )
             }
           >
-            {demoConnected ? (
-              <CheckCircle2
+            {deviceOnline ? (
+              <Wifi
                 size={17}
                 color="#59956a"
               />
             ) : (
-              <Wifi
+              <WifiOff
                 size={17}
-                color="#45634d"
+                color="#819086"
               />
             )}
 
-            {demoConnected
-              ? "Demo Connected"
-              : "Preview Connection"}
+            Device Connection
 
             <ChevronDown
               size={15}
               style={{
                 transform: deviceMenuOpen
-                  ? "rotate(180deg)"
-                  : "rotate(0deg)",
-                transition: "transform 0.2s",
+                  ? 'rotate(180deg)'
+                  : 'rotate(0deg)',
+
+                transition: 'transform 0.2s',
               }}
             />
           </button>
@@ -1506,7 +1858,7 @@ export default function SmartLunchbox() {
                 className="smart-device-dropdown"
                 initial={{
                   opacity: 0,
-                  y: -10,
+                  y: -8,
                   scale: 0.97,
                 }}
                 animate={{
@@ -1519,45 +1871,52 @@ export default function SmartLunchbox() {
                   y: -8,
                   scale: 0.97,
                 }}
-                transition={{ duration: 0.2 }}
+                transition={{
+                  duration: 0.2,
+                }}
               >
                 <div className="smart-device-dropdown-header">
                   <div>
                     <strong
                       style={{
-                        display: "block",
+                        display: 'block',
                         fontSize: 14,
                         marginBottom: 4,
                       }}
                     >
-                      SustansyaBox Device
+                      BiteWise Device
                     </strong>
 
                     <p className="smart-muted">
-                      {demoConnected
-                        ? "Simulated connection active"
-                        : "Preview disconnected"}
+                      {deviceOnline
+                        ? 'Device connected'
+                        : 'Device disconnected'}
                     </p>
                   </div>
 
                   <span className="smart-device-status">
                     <span
                       className={`smart-status-dot ${
-                        demoConnected ? "online" : ""
+                        deviceOnline
+                          ? 'online'
+                          : ''
                       }`}
                     />
 
-                    {demoConnected ? "Demo" : "Offline"}
+                    {deviceOnline
+                      ? 'Online'
+                      : 'Offline'}
                   </span>
                 </div>
 
                 <div className="smart-device-grid">
+
+                  {/* COMPARTMENT STATUS */}
+
                   <div className="smart-device-tile">
                     <div className="smart-device-tile-heading">
                       <UtensilsCrossed size={19} />
-                      <span style={{ fontSize: 10 }}>
-                        01
-                      </span>
+                      <span>03</span>
                     </div>
 
                     <span className="smart-muted">
@@ -1570,10 +1929,10 @@ export default function SmartLunchbox() {
                       <span
                         style={{
                           fontSize: 15,
-                          color: "var(--sb-muted)",
+                          color: 'var(--sb-muted)',
                         }}
                       >
-                        {" "}/ 3
+                        {' '}/ 3
                       </span>
                     </strong>
 
@@ -1583,50 +1942,48 @@ export default function SmartLunchbox() {
 
                     <div
                       style={{
-                        display: "flex",
+                        display: 'flex',
                         gap: 5,
-                        marginTop: "auto",
+                        marginTop: 'auto',
                       }}
                     >
-                      {[1, 2, 3].map((number) => (
+                      {compartments.map((item) => (
                         <span
-                          key={number}
+                          key={item.id}
                           style={{
                             flex: 1,
                             height: 6,
                             borderRadius: 99,
+
                             background:
-                              number <= filledCount
-                                ? "#7eaa84"
-                                : "var(--sb-border)",
+                              item.food
+                                ? '#7eaa84'
+                                : 'var(--sb-border)',
                           }}
                         />
                       ))}
                     </div>
                   </div>
 
+                  {/* ACTUAL LIVE WEIGHT */}
+
                   <div className="smart-device-tile">
                     <div className="smart-device-tile-heading">
                       <Scale size={19} />
 
-                      {demoConnected ? (
-                        <CheckCircle2
-                          size={15}
-                          color="#59956a"
-                        />
+                      {hasValidWeight ? (
+                        <CheckCircle2 size={15} />
                       ) : (
                         <WifiOff size={15} />
                       )}
                     </div>
 
                     <span className="smart-muted">
-                      Weight Sensor
+                      Live Weight
                     </span>
 
-                    <strong style={{ fontSize: 19 }}>
-                      {demoConnected
-                        ? "Ready"
-                        : "Unavailable"}
+                    <strong className="smart-device-value">
+                      {displayedWeight}
                     </strong>
 
                     <span className="smart-muted">
@@ -1635,58 +1992,55 @@ export default function SmartLunchbox() {
 
                     <span
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginTop: "auto",
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        marginTop: 'auto',
                         fontSize: 10,
-                        color: demoConnected
-                          ? "#59956a"
-                          : "var(--sb-muted)",
+
+                        color: hasValidWeight
+                          ? '#59956a'
+                          : 'var(--sb-muted)',
                       }}
                     >
-                      {demoConnected ? (
+                      {hasValidWeight ? (
                         <CheckCircle2 size={13} />
                       ) : (
-                        <WifiOff size={13} />
+                        <Info size={13} />
                       )}
 
-                      {demoConnected
-                        ? "Simulated sensor active"
-                        : "Sensor disconnected"}
+                      {sensorStatus}
                     </span>
                   </div>
                 </div>
 
                 <div className="smart-device-footer">
-                  <span
-                    className="smart-muted"
-                    style={{ fontSize: 10 }}
-                  >
-                    Demo only · No physical device
+                  <span className="smart-muted">
+                    Live ESP32 monitoring
                   </span>
 
-                  <button
-                    type="button"
-                    className="smart-button"
-                    onClick={() =>
-                      setDemoConnected(
-                        (previous) => !previous
-                      )
-                    }
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      fontSize: 10,
+
+                      color: deviceOnline
+                        ? '#59956a'
+                        : 'var(--sb-muted)',
+                    }}
                   >
-                    {demoConnected ? (
-                      <>
-                        <WifiOff size={14} />
-                        Disconnect
-                      </>
+                    {deviceOnline ? (
+                      <CheckCircle2 size={13} />
                     ) : (
-                      <>
-                        <Wifi size={14} />
-                        Connect Demo
-                      </>
+                      <RefreshCcw size={13} />
                     )}
-                  </button>
+
+                    {deviceOnline
+                      ? 'Auto-connected'
+                      : 'Reconnecting...'}
+                  </span>
                 </div>
               </motion.div>
             )}
@@ -1694,16 +2048,22 @@ export default function SmartLunchbox() {
         </div>
       </header>
 
-      {/* =================================================
-          MAIN CONTENT
-      ================================================= */}
+      {/* ====================================
+          SINGLE MAIN BOX
+      ==================================== */}
 
       <main className="smart-layout">
-        {/* ===============================================
-            TOP: TALLER LUNCHBOX
-        =============================================== */}
 
-        <section className="smart-card smart-panel smart-lunchbox-panel">
+        {/* ==================================
+            LEFT: LUNCHBOX COMPARTMENTS
+
+            NO EXTRA WHITE CARD
+        ================================== */}
+
+        <section className="smart-lunchbox-panel">
+
+          {/* TITLE OUTSIDE GREEN BACKGROUND */}
+
           <div className="smart-panel-heading">
             <div>
               <h3 className="smart-panel-title">
@@ -1711,38 +2071,45 @@ export default function SmartLunchbox() {
               </h3>
 
               <p className="smart-panel-subtitle">
-                Select a compartment to preview its
-                food and weight.
+                Select a compartment to preview
+                its food and weight.
               </p>
             </div>
 
             <span className="smart-panel-icon">
-              <UtensilsCrossed size={18} />
+              <UtensilsCrossed size={17} />
             </span>
           </div>
 
+          {/* ==================================
+              GREEN BACKGROUND STARTS HERE
+          ================================== */}
+
           <div className="smart-lunchbox-stage">
+
             <div className="smart-lunchbox-shell">
+
               {compartments.map((compartment) => (
                 <motion.button
                   key={compartment.id}
                   type="button"
                   className="smart-compartment-button"
-                  style={{
-                    gridRow:
-                      compartment.id === 1
-                        ? "span 2"
-                        : undefined,
+                  whileHover={{
+                    scale: 1.005,
                   }}
-                  whileHover={{ scale: 1.005 }}
-                  whileTap={{ scale: 0.995 }}
+                  whileTap={{
+                    scale: 0.99,
+                  }}
                   onClick={() =>
                     openPicker(compartment.id)
                   }
-                  aria-label={`Select food for compartment ${compartment.id}`}
+                  aria-label={
+                    `Select food for compartment ${compartment.id}`
+                  }
                 >
                   <span className="smart-compartment-number">
-                    {String(compartment.id).padStart(2, "0")}
+                    {String(compartment.id)
+                      .padStart(2, '0')}
                   </span>
 
                   {compartment.food ? (
@@ -1756,7 +2123,10 @@ export default function SmartLunchbox() {
                       </span>
 
                       <span className="smart-compartment-weight">
-                        {compartment.weight} g
+                        {formatNumber(
+                          compartment.weight,
+                          1
+                        )} g
                       </span>
                     </>
                   ) : (
@@ -1774,257 +2144,295 @@ export default function SmartLunchbox() {
                   )}
                 </motion.button>
               ))}
+
             </div>
           </div>
+
+          {/* ==================================
+              GREEN BACKGROUND ENDS HERE
+          ================================== */}
+
+          {/* BOTTOM DESCRIPTION OUTSIDE GREEN */}
 
           <div className="smart-info-line">
-            <Info size={13} />
+            <Info size={12} />
 
             <span>
-              Visual preview only. Actual sensor readings
-              will be connected later.
+              Select a compartment to manage its food.
+              Portion weights are entered separately.
             </span>
           </div>
+
         </section>
 
-        {/* ===============================================
-            BOTTOM LEFT: NUTRITION
-        =============================================== */}
+        {/* ==================================
+            RIGHT COLUMN
+        ================================== */}
 
-        <section className="smart-card smart-panel">
-          <div className="smart-panel-heading">
-            <div>
-              <h3 className="smart-panel-title">
-                Lunchbox Nutrition
-              </h3>
+        <div className="smart-right-column">
 
-              <p className="smart-panel-subtitle">
-                Estimated nutrition for your selected foods.
-              </p>
-            </div>
+          {/* ================================
+              TOP: LUNCHBOX NUTRITION
+          ================================ */}
 
-            <span className="smart-panel-icon">
-              <Droplets size={18} />
-            </span>
-          </div>
+          <section
+            className="
+              smart-card
+              smart-panel
+              smart-nutrition-panel
+            "
+          >
+            <div className="smart-panel-heading">
+              <div>
+                <h3 className="smart-panel-title">
+                  Lunchbox Nutrition
+                </h3>
 
-          <div className="smart-nutrition-content">
-            <div className="smart-calorie-box">
-              <p className="smart-calorie-label">
-                TOTAL CALORIES
-              </p>
-
-              <div className="smart-calorie-value">
-                {formatNumber(totals.calories)}
-
-                <span className="smart-calorie-unit">
-                  kcal
-                </span>
+                <p className="smart-panel-subtitle">
+                  Estimated nutrition for your
+                  selected foods.
+                </p>
               </div>
 
-              <p className="smart-muted">
-                {formatNumber(totals.weight)} g
-                of selected food
-              </p>
+              <span className="smart-panel-icon">
+                <Droplets size={18} />
+              </span>
             </div>
 
-            <div className="smart-nutrition-stats">
-              {[
-                {
-                  label: "Sugar",
-                  value: `${formatNumber(totals.sugar, 1)} g`,
-                  icon: Droplets,
-                },
-                {
-                  label: "Sodium",
-                  value: `${formatNumber(totals.sodium)} mg`,
-                  icon: Scale,
-                },
-                {
-                  label: "Compartments",
-                  value: `${filledCount} / 3`,
-                  icon: UtensilsCrossed,
-                },
-              ].map((item) => {
-                const Icon = item.icon;
+            <div className="smart-nutrition-content">
+
+              <div className="smart-calorie-box">
+                <p className="smart-calorie-label">
+                  TOTAL CALORIES
+                </p>
+
+                <strong className="smart-calorie-value">
+                  {formatNumber(totals.calories)}
+
+                  <span className="smart-calorie-unit">
+                    kcal
+                  </span>
+                </strong>
+
+                <p className="smart-muted">
+                  {formatNumber(totals.weight, 1)} g
+                  of selected food
+                </p>
+              </div>
+
+              <div className="smart-nutrition-stats">
+
+                <div className="smart-nutrition-stat">
+                  <span className="smart-nutrition-stat-label">
+                    <Droplets size={11} />
+                    Sugar
+                  </span>
+
+                  <strong className="smart-nutrition-stat-value">
+                    {formatNumber(totals.sugar, 1)} g
+                  </strong>
+                </div>
+
+                <div className="smart-nutrition-stat">
+                  <span className="smart-nutrition-stat-label">
+                    <Scale size={11} />
+                    Sodium
+                  </span>
+
+                  <strong className="smart-nutrition-stat-value">
+                    {formatNumber(totals.sodium)} mg
+                  </strong>
+                </div>
+
+                <div className="smart-nutrition-stat">
+                  <span className="smart-nutrition-stat-label">
+                    <UtensilsCrossed size={11} />
+                    Compartments
+                  </span>
+
+                  <strong className="smart-nutrition-stat-value">
+                    {filledCount} / 3
+                  </strong>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="smart-nutrition-footer">
+              <button
+                type="button"
+                className="smart-button"
+                onClick={clearAll}
+              >
+                <RefreshCcw size={12} />
+                Clear All
+              </button>
+
+              <p className="smart-muted">
+                Nutrition estimates vary
+                by preparation.
+              </p>
+            </div>
+          </section>
+
+          {/* ================================
+              BOTTOM: COMPARTMENT DETAILS
+          ================================ */}
+
+          <section
+            className="
+              smart-card
+              smart-panel
+              smart-details-panel
+            "
+          >
+            <div className="smart-panel-heading">
+              <div>
+                <h3 className="smart-panel-title">
+                  Compartment Details
+                </h3>
+
+                <p className="smart-panel-subtitle">
+                  Manage each compartment separately.
+                </p>
+              </div>
+
+              <span className="smart-panel-icon">
+                <UtensilsCrossed size={17} />
+              </span>
+            </div>
+
+            <div className="smart-details-grid">
+
+              {compartments.map((compartment) => {
+                const nutrition =
+                  compartment.food
+                    ? calculateNutrition(
+                        compartment.food,
+                        compartment.weight
+                      )
+                    : null
 
                 return (
                   <div
-                    key={item.label}
-                    className="smart-nutrition-stat"
+                    key={compartment.id}
+                    className="smart-detail-card"
                   >
-                    <span className="smart-nutrition-stat-label">
-                      <Icon size={13} />
-                      {item.label}
-                    </span>
 
-                    <strong className="smart-nutrition-stat-value">
-                      {item.value}
-                    </strong>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    <div className="smart-detail-header">
 
-          <div className="smart-nutrition-footer">
-            <button
-              type="button"
-              className="smart-button"
-              onClick={clearAll}
-            >
-              <RefreshCcw size={14} />
-              Clear Preview
-            </button>
+                      <strong className="smart-detail-name">
+                        Compartment {compartment.id}
+                      </strong>
 
-            <p className="smart-muted">
-              Illustrative estimates per 100 g.
-              Actual values vary by preparation.
-            </p>
-          </div>
-        </section>
+                      <span
+                        className={`smart-detail-badge ${
+                          compartment.food
+                            ? 'filled'
+                            : ''
+                        }`}
+                      >
+                        {compartment.food
+                          ? 'Filled'
+                          : 'Empty'}
+                      </span>
+                    </div>
 
-        {/* ===============================================
-            BOTTOM RIGHT: COMPARTMENT DETAILS
-        =============================================== */}
+                    <div className="smart-detail-food">
 
-        <section className="smart-card smart-panel">
-          <div className="smart-panel-heading">
-            <div>
-              <h3 className="smart-panel-title">
-                Compartment Details
-              </h3>
+                      {compartment.food ? (
+                        <>
+                          <span className="smart-detail-emoji">
+                            {compartment.food.emoji}
+                          </span>
 
-              <p className="smart-panel-subtitle">
-                Manage each compartment separately.
-              </p>
-            </div>
+                          <strong className="smart-detail-food-name">
+                            {compartment.food.name}
+                          </strong>
 
-            <span className="smart-panel-icon">
-              <UtensilsCrossed size={18} />
-            </span>
-          </div>
+                          <span className="smart-detail-food-meta">
+                            {formatNumber(
+                              compartment.weight,
+                              1
+                            )} g
+                          </span>
 
-          <div className="smart-details-grid">
-            {compartments.map((compartment) => {
-              const nutrition = compartment.food
-                ? calculateNutrition(
-                    compartment.food,
-                    compartment.weight
-                  )
-                : null;
+                          <span className="smart-detail-food-meta">
+                            {formatNumber(
+                              nutrition?.calories ?? 0
+                            )} kcal
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="smart-detail-emoji">
+                            🍱
+                          </span>
 
-              return (
-                <div
-                  key={compartment.id}
-                  className="smart-detail-card"
-                >
-                  <div className="smart-detail-header">
-                    <strong className="smart-detail-name">
-                      Compartment {compartment.id}
-                    </strong>
+                          <strong className="smart-detail-food-name">
+                            No food selected
+                          </strong>
 
-                    <span
-                      className={`smart-detail-badge ${
-                        compartment.food ? "filled" : ""
-                      }`}
-                    >
-                      {compartment.food ? "Filled" : "Empty"}
-                    </span>
-                  </div>
+                          <span className="smart-detail-food-meta">
+                            Waiting for food
+                          </span>
+                        </>
+                      )}
 
-                  <div className="smart-detail-food">
-                    <span className="smart-detail-emoji">
-                      {compartment.food?.emoji ?? "🍱"}
-                    </span>
+                    </div>
 
-                    <strong className="smart-detail-food-name">
-                      {compartment.food?.name ??
-                        "No food selected"}
-                    </strong>
-
-                    <span className="smart-detail-food-meta">
-                      {compartment.food
-                        ? `${compartment.weight} g · ${formatNumber(
-                            nutrition?.calories ?? 0
-                          )} kcal`
-                        : "Waiting for food"}
-                    </span>
-                  </div>
-
-                  <div className="smart-detail-actions">
-                    <button
-                      type="button"
-                      className="smart-button smart-button-primary"
-                      onClick={() =>
-                        openPicker(compartment.id)
-                      }
-                    >
-                      <Plus size={12} />
-
-                      {compartment.food
-                        ? "Change Food"
-                        : "Select Food"}
-                    </button>
-
-                    {compartment.food && (
+                    <div className="smart-detail-actions">
                       <button
                         type="button"
-                        className="smart-button"
+                        className="
+                          smart-button
+                          smart-button-primary
+                        "
                         onClick={() =>
-                          clearCompartment(compartment.id)
+                          openPicker(compartment.id)
                         }
                       >
-                        <X size={12} />
-                        Clear
+                        <Plus size={12} />
+
+                        {compartment.food
+                          ? 'Edit Food'
+                          : 'Select Food'}
                       </button>
-                    )}
+
+                      {compartment.food && (
+                        <button
+                          type="button"
+                          className="
+                            smart-button
+                            smart-remove-button
+                          "
+                          aria-label={
+                            `Clear compartment ${compartment.id}`
+                          }
+                          onClick={() =>
+                            clearCompartment(
+                              compartment.id
+                            )
+                          }
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+                )
+              })}
+
+            </div>
+          </section>
+
+        </div>
       </main>
 
-      {/* =================================================
-          TOAST
-      ================================================= */}
-
-      <AnimatePresence>
-        {notification && (
-          <motion.div
-            className="smart-toast"
-            role="status"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-          >
-            <CheckCircle2 size={17} />
-
-            <span style={{ flex: 1 }}>
-              {notification}
-            </span>
-
-            <button
-              type="button"
-              aria-label="Dismiss notification"
-              onClick={() => setNotification("")}
-              style={{
-                background: "transparent",
-                border: 0,
-                color: "#ffffff",
-              }}
-            >
-              <X size={15} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* =================================================
-          FOOD PICKER MODAL
-      ================================================= */}
+      {/* ====================================
+          FOOD SELECTION MODAL
+      ==================================== */}
 
       <AnimatePresence>
         {activeCompartment !== null && (
@@ -2039,26 +2447,26 @@ export default function SmartLunchbox() {
               className="smart-modal"
               role="dialog"
               aria-modal="true"
-              aria-label="Select food"
+              aria-label="Select your food"
               initial={{
                 opacity: 0,
-                y: 20,
-                scale: 0.97,
+                scale: 0.96,
+                y: 12,
               }}
               animate={{
                 opacity: 1,
-                y: 0,
                 scale: 1,
+                y: 0,
               }}
               exit={{
                 opacity: 0,
+                scale: 0.96,
                 y: 12,
-                scale: 0.97,
               }}
-              transition={{ duration: 0.25 }}
-              onClick={(event) => event.stopPropagation()}
+              onClick={(event) =>
+                event.stopPropagation()
+              }
             >
-              {/* MODAL HEADER */}
 
               <div className="smart-modal-header">
                 <div>
@@ -2071,26 +2479,22 @@ export default function SmartLunchbox() {
                   </h3>
 
                   <p className="smart-muted">
-                    Choose a food and adjust its estimated weight.
+                    Choose a food and enter
+                    its portion weight.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className="smart-button"
-                  onClick={closePicker}
                   aria-label="Close food picker"
-                  style={{
-                    width: 34,
-                    height: 34,
-                    padding: 0,
-                  }}
+                  onClick={closePicker}
                 >
                   <X size={17} />
                 </button>
               </div>
 
-              {/* SENSOR PREVIEW */}
+              {/* ACTUAL LIVE DEVICE WEIGHT */}
 
               <div className="smart-sensor-preview">
                 <div className="smart-sensor-icon">
@@ -2100,85 +2504,89 @@ export default function SmartLunchbox() {
                 <div style={{ flex: 1 }}>
                   <strong
                     style={{
-                      display: "block",
                       fontSize: 12,
-                      marginBottom: 4,
                     }}
                   >
-                    Weight Preview
+                    Live Scale Weight
                   </strong>
 
                   <p className="smart-muted">
-                    Simulated weight for nutrition estimates.
+                    Total weight measured by BiteWise.
                   </p>
                 </div>
 
-                <span
+                <strong
                   style={{
-                    color: "var(--sb-green)",
-                    fontWeight: 800,
-                    fontSize: 18,
-                    whiteSpace: "nowrap",
+                    fontSize: 19,
+                    color: 'var(--sb-green)',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {demoWeight} g
-                </span>
+                  {displayedWeight}
+                </strong>
               </div>
 
-              {/* WEIGHT SLIDER */}
+              {/* INDIVIDUAL PORTION WEIGHT */}
 
-              <div className="smart-simulator">
-                <div className="smart-simulator-header">
+              <div className="smart-portion-input">
+                <div className="smart-portion-heading">
                   <div>
-                    <strong style={{ fontSize: 12 }}>
-                      Demo Weight Simulator
+                    <strong
+                      style={{
+                        fontSize: 12,
+                      }}
+                    >
+                      Portion Weight
                     </strong>
 
-                    <p
-                      className="smart-muted"
-                      style={{ marginTop: 3 }}
-                    >
-                      Adjust the portion weight.
+                    <p className="smart-muted">
+                      Enter the weight of this food only.
                     </p>
                   </div>
 
-                  <strong
+                  <div
                     style={{
-                      color: "var(--sb-green)",
-                      fontSize: 14,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
                     }}
                   >
-                    {demoWeight} g
-                  </strong>
+                    <input
+                      className="smart-weight-input"
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={portionWeight}
+                      aria-label="Portion weight in grams"
+                      onChange={(event) =>
+                        setPortionWeight(
+                          Math.max(
+                            0,
+                            Number(
+                              event.target.value
+                            ) || 0
+                          )
+                        )
+                      }
+                    />
+
+                    <span className="smart-muted">
+                      g
+                    </span>
+                  </div>
                 </div>
 
-                <input
-                  type="range"
-                  className="smart-simulator-range"
-                  min={10}
-                  max={500}
-                  step={10}
-                  value={demoWeight}
-                  onChange={(event) =>
-                    setDemoWeight(
-                      Number(event.target.value)
-                    )
-                  }
-                  aria-label="Food weight in grams"
-                />
-
-                <div className="smart-range-labels">
-                  <span>10 g</span>
-                  <span>250 g</span>
-                  <span>500 g</span>
-                </div>
+                <p className="smart-muted">
+                  The load cell measures total weight,
+                  not individual compartments.
+                </p>
               </div>
 
-              {/* SEARCH */}
+              {/* FOOD SEARCH */}
 
               <div className="smart-search-box">
                 <Search
-                  size={17}
+                  size={16}
                   color="var(--sb-muted)"
                 />
 
@@ -2195,200 +2603,145 @@ export default function SmartLunchbox() {
                 {search && (
                   <button
                     type="button"
+                    className="smart-button"
                     aria-label="Clear search"
-                    onClick={() => setSearch("")}
-                    style={{
-                      border: 0,
-                      background: "transparent",
-                      color: "var(--sb-muted)",
-                      display: "grid",
-                      placeItems: "center",
-                    }}
+                    onClick={() => setSearch('')}
                   >
-                    <X size={15} />
+                    <X size={12} />
                   </button>
                 )}
               </div>
 
-              {/* FOOD CATALOG */}
+              {/* FOOD OPTIONS */}
 
               <div className="smart-food-list">
-                {filteredFoods.length === 0 ? (
-                  <div
+
+                {filteredFoods.map((food) => (
+                  <button
+                    key={food.id}
+                    type="button"
+                    className={`smart-food-option ${
+                      selectedFood?.id === food.id
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      setSelectedFood(food)
+                    }
+                  >
+                    <span
+                      style={{
+                        fontSize: 27,
+                      }}
+                    >
+                      {food.emoji}
+                    </span>
+
+                    <div style={{ flex: 1 }}>
+                      <strong
+                        style={{
+                          display: 'block',
+                          fontSize: 12,
+                        }}
+                      >
+                        {food.name}
+                      </strong>
+
+                      <span className="smart-muted">
+                        {food.category}
+                      </span>
+                    </div>
+
+                    <span className="smart-muted">
+                      {food.calories} kcal / 100 g
+                    </span>
+
+                    {selectedFood?.id === food.id && (
+                      <Check
+                        size={16}
+                        color="var(--sb-green)"
+                      />
+                    )}
+                  </button>
+                ))}
+
+                {filteredFoods.length === 0 && (
+                  <p
+                    className="smart-muted"
                     style={{
-                      padding: 20,
-                      textAlign: "center",
-                      color: "var(--sb-muted)",
-                      fontSize: 12,
+                      padding: 16,
+                      textAlign: 'center',
                     }}
                   >
                     No matching foods found.
-                  </div>
-                ) : (
-                  filteredFoods.map((food) => {
-                    const isSelected =
-                      selectedFood?.id === food.id;
-
-                    return (
-                      <button
-                        key={food.id}
-                        type="button"
-                        className={`smart-food-option ${
-                          isSelected ? "selected" : ""
-                        }`}
-                        onClick={() =>
-                          setSelectedFood(food)
-                        }
-                      >
-                        <span
-                          style={{
-                            width: 39,
-                            height: 39,
-                            flexShrink: 0,
-                            display: "grid",
-                            placeItems: "center",
-                            background:
-                              "var(--sb-background)",
-                            borderRadius: 10,
-                            fontSize: 23,
-                          }}
-                        >
-                          {food.emoji}
-                        </span>
-
-                        <div
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                          }}
-                        >
-                          <strong
-                            style={{
-                              display: "block",
-                              fontSize: 12,
-                              marginBottom: 3,
-                            }}
-                          >
-                            {food.name}
-                          </strong>
-
-                          <span className="smart-muted">
-                            {food.category}
-                          </span>
-                        </div>
-
-                        <div
-                          style={{
-                            textAlign: "right",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <strong
-                            style={{
-                              display: "block",
-                              fontSize: 11,
-                            }}
-                          >
-                            {food.calories} kcal
-                          </strong>
-
-                          <span
-                            className="smart-muted"
-                            style={{ fontSize: 9 }}
-                          >
-                            per 100 g
-                          </span>
-                        </div>
-
-                        {isSelected && (
-                          <Check
-                            size={17}
-                            color="#45634d"
-                          />
-                        )}
-                      </button>
-                    );
-                  })
+                  </p>
                 )}
+
               </div>
 
-              {/* SELECTED FOOD NUTRITION */}
+              {/* SELECTED FOOD SUMMARY */}
 
               {selectedFood && selectedNutrition && (
-                <div className="smart-selected-nutrition">
-                  <div
+                <div className="smart-selected-summary">
+
+                  <strong
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      marginBottom: 11,
+                      fontSize: 13,
                     }}
                   >
-                    <strong style={{ fontSize: 12 }}>
-                      Estimated Nutrition
-                    </strong>
+                    {selectedFood.emoji}{' '}
+                    {selectedFood.name}
+                  </strong>
 
-                    <span className="smart-muted">
-                      {demoWeight} g serving
-                    </span>
-                  </div>
+                  <p className="smart-muted">
+                    Estimated nutrition for{' '}
+                    {formatNumber(portionWeight, 1)} g
+                  </p>
 
-                  <div className="smart-selected-grid">
-                    {[
-                      {
-                        label: "Calories",
-                        value: `${formatNumber(
+                  <div className="smart-selected-stats">
+                    <div>
+                      <p className="smart-muted">
+                        Calories
+                      </p>
+
+                      <strong>
+                        {formatNumber(
                           selectedNutrition.calories
-                        )} kcal`,
-                      },
-                      {
-                        label: "Sugar",
-                        value: `${formatNumber(
+                        )} kcal
+                      </strong>
+                    </div>
+
+                    <div>
+                      <p className="smart-muted">
+                        Sugar
+                      </p>
+
+                      <strong>
+                        {formatNumber(
                           selectedNutrition.sugar,
                           1
-                        )} g`,
-                      },
-                      {
-                        label: "Sodium",
-                        value: `${formatNumber(
-                          selectedNutrition.sodium
-                        )} mg`,
-                      },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="smart-selected-stat"
-                      >
-                        <span
-                          className="smart-muted"
-                          style={{
-                            display: "block",
-                            fontSize: 10,
-                            marginBottom: 6,
-                          }}
-                        >
-                          {item.label}
-                        </span>
+                        )} g
+                      </strong>
+                    </div>
 
-                        <strong
-                          style={{
-                            display: "block",
-                            fontSize: 13,
-                            color: "var(--sb-green)",
-                          }}
-                        >
-                          {item.value}
-                        </strong>
-                      </div>
-                    ))}
+                    <div>
+                      <p className="smart-muted">
+                        Sodium
+                      </p>
+
+                      <strong>
+                        {formatNumber(
+                          selectedNutrition.sodium
+                        )} mg
+                      </strong>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* MODAL ACTIONS */}
+              {/* MODAL FOOTER */}
 
-              <div className="smart-modal-actions">
+              <div className="smart-modal-footer">
                 <button
                   type="button"
                   className="smart-button"
@@ -2399,18 +2752,56 @@ export default function SmartLunchbox() {
 
                 <button
                   type="button"
-                  className="smart-button smart-button-primary"
-                  disabled={!selectedFood}
+                  className="
+                    smart-button
+                    smart-button-primary
+                  "
+                  disabled={
+                    !selectedFood ||
+                    !Number.isFinite(portionWeight) ||
+                    portionWeight <= 0
+                  }
                   onClick={saveFood}
                 >
                   <Check size={15} />
                   Save Food
                 </button>
               </div>
+
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ====================================
+          NOTIFICATION
+      ==================================== */}
+
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            className="smart-toast"
+            role="status"
+            initial={{
+              opacity: 0,
+              y: 15,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            exit={{
+              opacity: 0,
+              y: 15,
+            }}
+          >
+            <CheckCircle2 size={17} />
+
+            {notification}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </motion.div>
-  );
+  )
 }

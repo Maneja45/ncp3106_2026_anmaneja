@@ -1,5 +1,9 @@
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react'
 
-import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Moon, Sun } from 'lucide-react'
 
@@ -35,6 +39,37 @@ import {
 import { API_BASE_URL } from './services/api'
 
 import './App.css'
+
+// ============================================
+// ESP32 CONNECTION SETTINGS
+// ============================================
+
+const ESP32_URL = 'http://bitewise.local/weight'
+
+const ESP32_POLL_INTERVAL = 500
+
+const ESP32_RECONNECT_INTERVAL = 300
+
+const ESP32_REQUEST_TIMEOUT = 1500
+
+const ESP32_MAX_FAILURES = 3
+
+type ESP32Response = {
+  weight: number | null
+  ready: boolean
+}
+
+type ESP32State = {
+  connected: boolean
+  weight: number | null
+  ready: boolean
+}
+
+const INITIAL_ESP32_STATE: ESP32State = {
+  connected: false,
+  weight: null,
+  ready: false,
+}
 
 // ============================================
 // TYPES
@@ -108,10 +143,8 @@ function loadProfile(): ProfileData {
         typeof parsed === 'object' &&
         !Array.isArray(parsed)
       ) {
-        const values = parsed as Record<
-          string,
-          unknown
-        >
+        const values =
+          parsed as Record<string, unknown>
 
         const result = { ...initialProfile }
 
@@ -129,7 +162,7 @@ function loadProfile(): ProfileData {
       }
     }
   } catch {
-    // Use default profile if storage is unavailable.
+    // Use default profile.
   }
 
   return { ...initialProfile }
@@ -147,10 +180,13 @@ async function loginWithBackend(
     `${API_BASE_URL}/login.php`,
     {
       method: 'POST',
+
       headers: {
         'Content-Type': 'application/json',
       },
+
       credentials: 'include',
+
       body: JSON.stringify({
         email: email.trim().toLowerCase(),
         password,
@@ -185,6 +221,7 @@ async function loginWithBackend(
 // ============================================
 
 function App() {
+
   // ==========================================
   // SHARED MEALS
   // ==========================================
@@ -204,44 +241,367 @@ function App() {
   // ==========================================
 
   const [isLoggedIn, setIsLoggedIn] =
-    useState(false)
+    useState<boolean>(false)
 
   const [authPage, setAuthPage] =
     useState<AuthPage>('login')
 
   const [pendingEmail, setPendingEmail] =
-    useState('')
+    useState<string>('')
 
   const [loginError, setLoginError] =
-    useState('')
+    useState<string>('')
 
   const [loginLoading, setLoginLoading] =
-    useState(false)
+    useState<boolean>(false)
 
   const [registeredMessage, setRegisteredMessage] =
-    useState('')
+    useState<string>('')
 
   // ==========================================
   // APPEARANCE
   // ==========================================
 
   const [darkMode, setDarkMode] =
-    useState(false)
+    useState<boolean>(false)
 
   const [showOpening, setShowOpening] =
-    useState(false)
+    useState<boolean>(false)
 
   // ==========================================
-  // DEVICE PREVIEW
+  // STABLE OPENING ANIMATION CALLBACK
   // ==========================================
 
-  const [
-    deviceConnected,
-    setDeviceConnected,
-  ] = useState(false)
+  const handleOpeningComplete =
+    useCallback((): void => {
+      setShowOpening(false)
+    }, [])
+
+  // ==========================================
+  // ACTUAL ESP32 CONNECTION STATE
+  // ==========================================
+
+  const [esp32, setEsp32] =
+    useState<ESP32State>(
+      INITIAL_ESP32_STATE
+    )
+
+  const deviceConnected =
+    esp32.connected
+
+  const deviceInitializing =
+    esp32.connected && !esp32.ready
+
+  // Battery monitoring is not yet implemented.
 
   const batteryPercentage: number | null =
-    deviceConnected ? 85 : null
+    null
+
+  // ==========================================
+  // AUTOMATIC ESP32 CONNECTION
+  // ==========================================
+
+  useEffect(() => {
+
+    // Prevent the opening animation from
+    // being interrupted by sensor updates.
+
+    if (!isLoggedIn || showOpening) {
+      return
+    }
+
+    let active = true
+    let requestInProgress = false
+    let isConnected = false
+    let failedRequests = 0
+
+    let pollTimer:
+      ReturnType<typeof setTimeout> | undefined
+
+    let controller:
+      AbortController | undefined
+
+    // ========================================
+    // UPDATE DEVICE STATE
+    // ========================================
+
+    const updateDeviceState = (
+      next: ESP32State
+    ): void => {
+      if (!active) return
+
+      setEsp32((previous) => {
+
+        // Avoid unnecessary React renders.
+
+        if (
+          previous.connected === next.connected &&
+          previous.ready === next.ready &&
+          previous.weight === next.weight
+        ) {
+          return previous
+        }
+
+        return next
+      })
+    }
+
+    // ========================================
+    // CHECK ESP32 CONNECTION
+    // ========================================
+
+    const checkESP32 =
+      async (): Promise<void> => {
+
+        if (!active || requestInProgress) {
+          return
+        }
+
+        requestInProgress = true
+
+        clearTimeout(pollTimer)
+
+        const requestController =
+          new AbortController()
+
+        controller = requestController
+
+        const requestTimeout = setTimeout(() => {
+          requestController.abort()
+        }, ESP32_REQUEST_TIMEOUT)
+
+        try {
+
+          // Prevent cached weight responses.
+
+          const requestURL =
+            `${ESP32_URL}?t=${Date.now()}`
+
+          const response = await fetch(
+            requestURL,
+            {
+              method: 'GET',
+              cache: 'no-store',
+              signal: requestController.signal,
+            }
+          )
+
+          if (!response.ok) {
+            throw new Error(
+              'ESP32 is unavailable'
+            )
+          }
+
+          const data: ESP32Response =
+            await response.json()
+
+          if (
+            !data ||
+            typeof data.ready !== 'boolean'
+          ) {
+            throw new Error(
+              'Invalid ESP32 response'
+            )
+          }
+
+          if (!active) return
+
+          // ==================================
+          // CONNECTION SUCCESSFUL
+          // ==================================
+
+          if (!isConnected) {
+            console.info(
+              '[BiteWise] ESP32 connected successfully.'
+            )
+          }
+
+          isConnected = true
+          failedRequests = 0
+
+          // Weight can temporarily be null
+          // during initialization or TARE.
+
+          const weight =
+            typeof data.weight === 'number' &&
+            Number.isFinite(data.weight)
+              ? data.weight
+              : null
+
+          const sensorReady =
+            data.ready && weight !== null
+
+          updateDeviceState({
+            connected: true,
+            ready: sensorReady,
+            weight: sensorReady ? weight : null,
+          })
+
+        } catch {
+
+          if (!active) return
+
+          failedRequests += 1
+          isConnected = false
+
+          // ==================================
+          // TEMPORARY CONNECTION FAILURE
+          // ==================================
+
+          if (
+            failedRequests >= ESP32_MAX_FAILURES
+          ) {
+
+            updateDeviceState({
+              connected: false,
+              ready: false,
+              weight: null,
+            })
+
+            if (
+              failedRequests === ESP32_MAX_FAILURES
+            ) {
+              console.info(
+                '[BiteWise] ESP32 offline. Automatically reconnecting...'
+              )
+            }
+
+          } else {
+
+            // Maintain connection status during
+            // a brief interruption.
+
+            setEsp32((previous) => {
+
+              if (!previous.connected) {
+                return previous
+              }
+
+              if (
+                !previous.ready &&
+                previous.weight === null
+              ) {
+                return previous
+              }
+
+              return {
+                connected: true,
+                ready: false,
+                weight: null,
+              }
+
+            })
+
+          }
+
+        } finally {
+
+          clearTimeout(requestTimeout)
+
+          requestInProgress = false
+
+          // ==================================
+          // AUTOMATIC RECONNECTION
+          // ==================================
+
+          if (active) {
+            pollTimer = setTimeout(
+              () => {
+                void checkESP32()
+              },
+
+              isConnected
+                ? ESP32_POLL_INTERVAL
+                : ESP32_RECONNECT_INTERVAL
+            )
+          }
+
+        }
+      }
+
+    // ========================================
+    // IMMEDIATE CONNECTION CHECK
+    // ========================================
+
+    const reconnectNow = (): void => {
+
+      if (!active || requestInProgress) {
+        return
+      }
+
+      clearTimeout(pollTimer)
+
+      void checkESP32()
+    }
+
+    // ========================================
+    // BROWSER VISIBILITY CHECK
+    // ========================================
+
+    const handleVisibilityChange = (): void => {
+
+      if (
+        document.visibilityState === 'visible'
+      ) {
+        reconnectNow()
+      }
+
+    }
+
+    // ========================================
+    // NETWORK EVENT LISTENERS
+    // ========================================
+
+    window.addEventListener(
+      'online',
+      reconnectNow
+    )
+
+    window.addEventListener(
+      'focus',
+      reconnectNow
+    )
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange
+    )
+
+    // Start immediately after the opening
+    // animation finishes.
+
+    void checkESP32()
+
+    // ========================================
+    // CLEANUP
+    // ========================================
+
+    return () => {
+
+      active = false
+
+      clearTimeout(pollTimer)
+
+      controller?.abort()
+
+      window.removeEventListener(
+        'online',
+        reconnectNow
+      )
+
+      window.removeEventListener(
+        'focus',
+        reconnectNow
+      )
+
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      )
+
+    }
+
+  }, [isLoggedIn, showOpening])
 
   // ==========================================
   // NAVIGATION
@@ -266,6 +626,7 @@ function App() {
   // ==========================================
 
   useEffect(() => {
+
     if (!isLoggedIn) return
 
     try {
@@ -276,16 +637,17 @@ function App() {
     } catch {
       // Storage might be disabled.
     }
+
   }, [profile, isLoggedIn])
 
   const handleSaveProfile = (
     updatedProfile: ProfileData
-  ) => {
+  ): void => {
     setProfile(updatedProfile)
   }
 
   // ==========================================
-  // NUTRITION GOALS
+  // NUTRITION SETTINGS
   // ==========================================
 
   const calorieGoal =
@@ -302,13 +664,15 @@ function App() {
   // ==========================================
 
   useEffect(() => {
+
     document.documentElement.setAttribute(
       'data-theme',
       darkMode ? 'dark' : 'light'
     )
+
   }, [darkMode])
 
-  const toggleTheme = () => {
+  const toggleTheme = (): void => {
     setDarkMode((previous) => !previous)
   }
 
@@ -320,38 +684,42 @@ function App() {
     email: string,
     password: string
   ): Promise<void> => {
+
     if (loginLoading) return
 
     setLoginError('')
     setRegisteredMessage('')
 
     if (!email.trim() || !password) {
+
       setLoginError(
         'Please enter your email and password.'
       )
+
       return
     }
 
     setLoginLoading(true)
 
     try {
+
       const result = await loginWithBackend(
         email,
         password
       )
 
-      // Only the backend can confirm a valid login.
       if (!result.success) {
         throw new Error(
           'Unable to sign in.'
         )
       }
 
-      // Clear any previous user's local profile.
       try {
+
         localStorage.removeItem(
           PROFILE_STORAGE_KEY
         )
+
       } catch {
         // Continue without browser storage.
       }
@@ -360,59 +728,83 @@ function App() {
 
       setProfile({
         ...initialProfile,
+
         fullName:
           loggedInUser?.full_name ||
           initialProfile.fullName,
+
         email:
           loggedInUser?.email ||
           email.trim().toLowerCase(),
+
         age:
           loggedInUser?.age != null
             ? String(loggedInUser.age)
             : initialProfile.age,
+
         height:
           loggedInUser?.height != null
             ? String(loggedInUser.height)
             : initialProfile.height,
+
         weight:
           loggedInUser?.weight != null
             ? String(loggedInUser.weight)
             : initialProfile.weight,
       })
+
       setMeals(sampleMeals)
 
+      setEsp32(INITIAL_ESP32_STATE)
+
       setActivePage('Smart Lunchbox')
-      setIsLoggedIn(true)
+
+      // Opening animation runs once
+      // after successful login.
+
       setShowOpening(true)
+
+      setIsLoggedIn(true)
+
       setPendingEmail('')
+
       setAuthPage('login')
+
     } catch (error: unknown) {
+
       if (error instanceof TypeError) {
+
         setLoginError(
           'Cannot connect to XAMPP. Please check that Apache and MySQL are running.'
         )
+
       } else if (error instanceof Error) {
+
         setLoginError(error.message)
+
       } else {
+
         setLoginError(
           'Login failed. Please try again.'
         )
+
       }
+
     } finally {
+
       setLoginLoading(false)
+
     }
   }
 
-  // Registration is already submitted to PHP
-  // inside Register.tsx.
-  //
-  // This callback runs ONLY after registration
-  // succeeds, so we do not save the password
-  // or create the account a second time.
+  // ==========================================
+  // REGISTRATION
+  // ==========================================
 
   const handleRegister = (
     data: RegistrationData
   ): void => {
+
     setPendingEmail(data.email)
 
     setRegisteredMessage(
@@ -420,39 +812,52 @@ function App() {
     )
 
     setLoginError('')
-    setAuthPage('login')
-  }
 
-  const handleForgotPassword = (
-    email: string
-  ): void => {
-    setPendingEmail(email)
-    setAuthPage('recovery-verify')
-  }
-
-  const handleRecoveryVerified = (): void => {
-    setAuthPage('reset-password')
-  }
-
-  const handleResetComplete = (): void => {
-    setPendingEmail('')
     setAuthPage('login')
   }
 
   // ==========================================
-  // NAVIGATION
+  // FORGOT PASSWORD
+  // ==========================================
+
+  const handleForgotPassword = (
+    email: string
+  ): void => {
+
+    setPendingEmail(email)
+
+    setAuthPage('recovery-verify')
+  }
+
+  const handleRecoveryVerified =
+    (): void => {
+      setAuthPage('reset-password')
+    }
+
+  const handleResetComplete =
+    (): void => {
+      setPendingEmail('')
+      setAuthPage('login')
+    }
+
+  // ==========================================
+  // NAVIGATION HANDLER
   // ==========================================
 
   const handleNavigate = (
     page: string
   ): void => {
+
     if (
       dashboardPages.includes(
         page as DashboardPage
       )
     ) {
-      setActivePage(page as DashboardPage)
+      setActivePage(
+        page as DashboardPage
+      )
     }
+
   }
 
   // ==========================================
@@ -463,68 +868,98 @@ function App() {
     return (
       <>
         <style>{`
+
           .sb-auth-feedback {
             position: fixed;
             z-index: 9999;
+
             left: 50%;
             top: 14px;
+
             transform: translateX(-50%);
-            width: min(440px, calc(100% - 32px));
+
+            width:
+              min(440px, calc(100% - 32px));
+
             padding: 13px 18px;
+
             border-radius: 12px;
+
             font-family: 'DM Sans', sans-serif;
             font-size: 13px;
             font-weight: 600;
+
             text-align: center;
-            box-shadow: 0 12px 35px rgba(0,0,0,.1);
+
+            box-shadow:
+              0 12px 35px rgba(0,0,0,.1);
           }
 
           .sb-auth-feedback.success {
             background: #eaf5ed;
             color: #285e3b;
+
             border: 1px solid #bcdac3;
           }
 
           .sb-auth-feedback.error {
             background: #fff0ed;
             color: #a33e35;
+
             border: 1px solid #f2d0ca;
           }
 
           .sb-auth-loading {
             position: fixed;
             z-index: 9998;
+
             bottom: 24px;
             left: 50%;
+
             transform: translateX(-50%);
+
             padding: 11px 20px;
+
             border-radius: 30px;
+
             background: #284b39;
             color: white;
+
             font-family: 'DM Sans', sans-serif;
             font-size: 12px;
             font-weight: 700;
-            box-shadow: 0 10px 30px rgba(0,0,0,.15);
+
+            box-shadow:
+              0 10px 30px rgba(0,0,0,.15);
           }
+
         `}</style>
 
-        {authPage === 'login' && registeredMessage && (
-          <div
-            className="sb-auth-feedback success"
-            role="status"
-          >
-            {registeredMessage}
-          </div>
-        )}
+        {/* SUCCESS MESSAGE */}
 
-        {authPage === 'login' && loginError && (
-          <div
-            className="sb-auth-feedback error"
-            role="alert"
-          >
-            {loginError}
-          </div>
-        )}
+        {authPage === 'login' &&
+          registeredMessage && (
+            <div
+              className="sb-auth-feedback success"
+              role="status"
+            >
+              {registeredMessage}
+            </div>
+          )}
+
+        {/* ERROR MESSAGE */}
+
+        {authPage === 'login' &&
+          loginError && (
+            <div
+              className="sb-auth-feedback error"
+              role="alert"
+            >
+              {loginError}
+            </div>
+          )}
+
+        {/* LOGIN LOADING */}
 
         {loginLoading && (
           <div
@@ -536,22 +971,40 @@ function App() {
         )}
 
         <AnimatePresence mode="wait">
+
+          {/* LOGIN PAGE */}
+
           {authPage === 'login' && (
             <motion.div
               key="login"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.35 }}
-              style={{ minHeight: '100vh' }}
+              initial={{
+                opacity: 0,
+                x: -20,
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+              }}
+              exit={{
+                opacity: 0,
+                x: 20,
+              }}
+              transition={{
+                duration: 0.35,
+              }}
+              style={{
+                minHeight: '100vh',
+              }}
             >
               <Login
                 onLogin={handleLogin}
+
                 onRegister={() => {
                   setLoginError('')
                   setRegisteredMessage('')
                   setAuthPage('register')
                 }}
+
                 onForgotPassword={() => {
                   setLoginError('')
                   setRegisteredMessage('')
@@ -561,17 +1014,33 @@ function App() {
             </motion.div>
           )}
 
+          {/* REGISTER PAGE */}
+
           {authPage === 'register' && (
             <motion.div
               key="register"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.35 }}
-              style={{ minHeight: '100vh' }}
+              initial={{
+                opacity: 0,
+                x: 20,
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+              }}
+              exit={{
+                opacity: 0,
+                x: -20,
+              }}
+              transition={{
+                duration: 0.35,
+              }}
+              style={{
+                minHeight: '100vh',
+              }}
             >
               <Register
                 onRegister={handleRegister}
+
                 onBackToLogin={() => {
                   setAuthPage('login')
                   setLoginError('')
@@ -580,17 +1049,35 @@ function App() {
             </motion.div>
           )}
 
+          {/* FORGOT PASSWORD PAGE */}
+
           {authPage === 'forgot-password' && (
             <motion.div
               key="forgot-password"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.35 }}
-              style={{ minHeight: '100vh' }}
+              initial={{
+                opacity: 0,
+                x: 20,
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+              }}
+              exit={{
+                opacity: 0,
+                x: -20,
+              }}
+              transition={{
+                duration: 0.35,
+              }}
+              style={{
+                minHeight: '100vh',
+              }}
             >
               <ForgotPassword
-                onContinue={handleForgotPassword}
+                onContinue={
+                  handleForgotPassword
+                }
+
                 onBackToLogin={() =>
                   setAuthPage('login')
                 }
@@ -598,18 +1085,37 @@ function App() {
             </motion.div>
           )}
 
+          {/* EMAIL VERIFICATION */}
+
           {authPage === 'recovery-verify' && (
             <motion.div
               key="recovery-verify"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.35 }}
-              style={{ minHeight: '100vh' }}
+              initial={{
+                opacity: 0,
+                y: 20,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                y: -20,
+              }}
+              transition={{
+                duration: 0.35,
+              }}
+              style={{
+                minHeight: '100vh',
+              }}
             >
               <EmailVerification
                 email={pendingEmail}
-                onVerified={handleRecoveryVerified}
+
+                onVerified={
+                  handleRecoveryVerified
+                }
+
                 onBack={() =>
                   setAuthPage('forgot-password')
                 }
@@ -617,23 +1123,42 @@ function App() {
             </motion.div>
           )}
 
+          {/* RESET PASSWORD PAGE */}
+
           {authPage === 'reset-password' && (
             <motion.div
               key="reset-password"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.35 }}
-              style={{ minHeight: '100vh' }}
+              initial={{
+                opacity: 0,
+                x: 20,
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+              }}
+              exit={{
+                opacity: 0,
+                x: -20,
+              }}
+              transition={{
+                duration: 0.35,
+              }}
+              style={{
+                minHeight: '100vh',
+              }}
             >
               <ResetPassword
-                onComplete={handleResetComplete}
+                onComplete={
+                  handleResetComplete
+                }
+
                 onBack={() =>
                   setAuthPage('recovery-verify')
                 }
               />
             </motion.div>
           )}
+
         </AnimatePresence>
       </>
     )
@@ -645,10 +1170,12 @@ function App() {
 
   return (
     <div className="app sustansya-app-shell">
+
       <style>{`
+
         /* =====================================
            TYPOGRAPHY
-           ===================================== */
+        ===================================== */
 
         .sustansya-app-shell {
           font-family: 'DM Sans', sans-serif;
@@ -664,7 +1191,11 @@ function App() {
         .sustansya-app-shell .sb-page-title,
         .sustansya-app-shell .sb-dashboard-welcome h1,
         .sustansya-app-shell .sb-section-heading {
-          font-family: Georgia, 'Times New Roman', serif;
+          font-family:
+            Georgia,
+            'Times New Roman',
+            serif;
+
           font-weight: 700;
           letter-spacing: -0.6px;
         }
@@ -676,7 +1207,7 @@ function App() {
 
         /* =====================================
            APPLICATION SHELL
-           ===================================== */
+        ===================================== */
 
         .sustansya-app-shell,
         .sustansya-app-shell * {
@@ -685,53 +1216,83 @@ function App() {
 
         .sustansya-app-shell {
           display: flex;
+
           width: 100%;
           height: 100dvh;
+
+          min-width: 0;
           min-height: 0;
+
           overflow: hidden;
         }
 
         .sustansya-workspace {
           flex: 1 1 0;
+
           min-width: 0;
           min-height: 0;
+
           display: flex;
           flex-direction: column;
+
           padding: 12px 22px;
+
           overflow: hidden;
         }
 
         .sustansya-content {
           flex: 1 1 0;
+
           min-width: 0;
           min-height: 0;
         }
 
         /* =====================================
            PAGE SCROLL BEHAVIOR
-           ===================================== */
+        ===================================== */
 
         .sustansya-content.dashboard-active {
           height: 100%;
+
+          min-height: 0;
+
           overflow: hidden;
         }
 
+        /* SMART LUNCHBOX */
+
         .sustansya-content.smart-lunchbox-active {
-          height: 100%;
-          min-height: 0;
           display: flex;
           flex-direction: column;
+
+          flex: 1 1 0;
+
+          width: 100%;
+          height: 100%;
+
+          min-width: 0;
+          min-height: 0;
+
           overflow: hidden;
         }
 
         .sustansya-content.smart-lunchbox-active
         > .smart-page {
+          display: flex;
+          flex-direction: column;
+
           flex: 1 1 0;
+
           width: 100%;
           height: 100%;
+
+          min-width: 0;
           min-height: 0;
+
           overflow: hidden;
         }
+
+        /* OTHER PAGES */
 
         .sustansya-content.other-page-active {
           overflow-x: hidden;
@@ -740,13 +1301,15 @@ function App() {
 
         /* =====================================
            PAGE HEADER
-           ===================================== */
+        ===================================== */
 
         .sb-page-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
+
           flex-shrink: 0;
+
           gap: 14px;
           margin-bottom: 9px;
         }
@@ -758,54 +1321,69 @@ function App() {
 
         .sb-page-eyebrow {
           margin: 0 0 2px;
+
           font-size: 10px;
           font-weight: 700;
           letter-spacing: 1.4px;
+
           color: var(--muted);
         }
 
         .sb-page-title {
           margin: 0;
-          font-size: clamp(25px, 2.15vw, 31px);
+
+          font-size:
+            clamp(25px, 2.15vw, 31px);
+
           font-weight: 700;
           line-height: 1.15;
+
           color: var(--text);
         }
 
         /* =====================================
            DASHBOARD WELCOME HEADER
-           ===================================== */
+        ===================================== */
 
         .sb-dashboard-welcome {
           margin: 0;
           padding: 0;
+
           min-height: 0;
         }
 
         .sb-dashboard-welcome h1 {
           margin: 0 0 5px;
-          font-size: clamp(23px, 2.1vw, 31px);
+
+          font-size:
+            clamp(23px, 2.1vw, 31px);
+
           font-weight: 700;
           line-height: 1.2;
+
           color: var(--primary);
         }
 
         .sb-dashboard-welcome p {
           margin: 0;
+
           font-size: 12px;
           line-height: 1.5;
+
           color: var(--muted);
         }
 
         /* =====================================
            HEADER ACTIONS
-           ===================================== */
+        ===================================== */
 
         .sb-header-actions {
           display: flex;
           align-items: center;
           justify-content: flex-end;
+
           gap: 12px;
+
           flex-shrink: 0;
         }
 
@@ -813,13 +1391,18 @@ function App() {
           display: flex;
           align-items: center;
           justify-content: center;
+
           width: 42px;
           height: 42px;
+
           background: var(--surface);
           color: var(--text);
+
           border: 1px solid var(--border);
           border-radius: 12px;
+
           cursor: pointer;
+
           transition:
             transform 0.2s ease,
             background 0.2s ease;
@@ -830,22 +1413,29 @@ function App() {
         }
 
         /* =====================================
-           DEVICE STATUS
-           ===================================== */
+           ACTUAL DEVICE STATUS
+        ===================================== */
 
         .sb-device-status {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+
           gap: 6px;
           padding: 4px 0;
+
           background: transparent;
           border: none;
-          cursor: pointer;
+
+          cursor: default;
+
           color: var(--muted);
+
           font-size: 12px;
           font-weight: 600;
+
           white-space: nowrap;
+
           transition: color 0.2s ease;
         }
 
@@ -856,9 +1446,13 @@ function App() {
         .sb-device-dot {
           width: 8px;
           height: 8px;
+
           border-radius: 50%;
+
           background: #9CA3AF;
+
           flex-shrink: 0;
+
           transition: background 0.2s ease;
         }
 
@@ -870,94 +1464,122 @@ function App() {
         .sb-signal-icon {
           width: 20px;
           height: 20px;
+
           flex-shrink: 0;
+
           display: block;
         }
 
         .sb-battery-icon {
           width: 36px;
           height: 22px;
+
           flex-shrink: 0;
+
           display: block;
+
           color: var(--text);
         }
 
         /* =====================================
            DASHBOARD GRID
-           ===================================== */
+        ===================================== */
 
         .sb-dashboard {
           height: 100%;
+
           min-height: 0;
           min-width: 0;
+
           display: grid;
+
           grid-template-rows:
             minmax(0, 48fr)
             minmax(0, 52fr);
+
           gap: 14px;
+
           overflow: hidden;
         }
 
         /* =====================================
            DASHBOARD NUTRITION
-           ===================================== */
+        ===================================== */
 
         .sb-nutrition {
           display: flex;
           flex-direction: column;
+
           min-width: 0;
           min-height: 0;
+
           gap: 9px;
         }
 
         .sb-section-heading {
           margin: 0;
-          font-size: clamp(17px, 1.35vw, 20px);
+
+          font-size:
+            clamp(17px, 1.35vw, 20px);
+
           font-weight: 700;
           line-height: 1.2;
+
           color: var(--text);
+
           flex-shrink: 0;
         }
 
         .sb-nutrition-grid {
           display: grid;
+
           grid-template-columns:
             minmax(0, 1fr)
             minmax(0, 1fr);
+
           gap: 14px;
+
           flex: 1 1 0;
+
           min-width: 0;
           min-height: 0;
         }
 
         /* =====================================
            CALORIE CARD
-           ===================================== */
+        ===================================== */
 
         .sb-calorie-area {
           display: flex;
+
           min-width: 0;
           min-height: 0;
+
           overflow: hidden;
         }
 
         .sb-calorie-area > * {
           width: 100%;
           height: 100%;
+
           min-width: 0;
           min-height: 0;
+
           padding-bottom: 12px;
         }
 
         /* =====================================
            SUGAR AND SODIUM
-           ===================================== */
+        ===================================== */
 
         .sb-nutrients-area {
           display: grid;
+
           grid-template-rows:
             repeat(2, minmax(0, 1fr));
+
           gap: 12px;
+
           min-width: 0;
           min-height: 0;
         }
@@ -965,8 +1587,11 @@ function App() {
         .sb-nutrients-area > * {
           min-width: 0;
           min-height: 0;
+
           height: 100%;
+
           padding: 12px 18px !important;
+
           overflow: visible;
         }
 
@@ -977,64 +1602,146 @@ function App() {
 
         /* =====================================
            DASHBOARD LUNCHBOX PREVIEW
-           ===================================== */
+        ===================================== */
 
         .sb-lunchbox-area {
           min-height: 0;
           min-width: 0;
+
           overflow: hidden;
         }
 
         .sb-lunchbox-scale {
           zoom: 0.62;
+
           width: 100%;
         }
 
         /* =====================================
-           SMART LUNCHBOX BENTO
-           ===================================== */
+           NEW SMART LUNCHBOX FULL SCREEN
+           SINGLE MAIN CONTAINER
 
-        .smart-lunchbox-active .smart-layout {
+           LEFT   : LUNCHBOX
+           RIGHT  : NUTRITION AND DETAILS
+        ===================================== */
+
+        .sustansya-content.smart-lunchbox-active
+        .smart-layout {
+          width: 100%;
+
           flex: 1 1 0;
+
+          min-width: 0;
           min-height: 0;
+
           display: grid;
+
           grid-template-columns:
-            repeat(2, minmax(0, 1fr));
+            minmax(0, 55fr)
+            minmax(0, 45fr);
+
           grid-template-rows:
-            minmax(0, 1.15fr)
-            minmax(0, 0.9fr);
+            minmax(0, 1fr);
+
           gap: 14px;
+
+          overflow: hidden;
         }
 
-        .smart-lunchbox-active
+        /* =====================================
+           LEFT SIDE: LARGE LUNCHBOX
+        ===================================== */
+
+        .sustansya-content.smart-lunchbox-active
         .smart-lunchbox-panel {
-          grid-column: 1 / -1;
+          grid-column: 1;
+          grid-row: 1;
+
+          min-width: 0;
+          min-height: 0;
+
+          display: flex;
+          flex-direction: column;
+        }
+
+        .sustansya-content.smart-lunchbox-active
+        .smart-lunchbox-stage {
+          flex: 1 1 0;
+
+          width: 100%;
+
+          min-width: 0;
           min-height: 0;
         }
 
-        .smart-lunchbox-active
-        .smart-nutrition-panel,
-        .smart-lunchbox-active
+        /* =====================================
+           RIGHT SIDE
+        ===================================== */
+
+        .sustansya-content.smart-lunchbox-active
+        .smart-right-column {
+          grid-column: 2;
+          grid-row: 1;
+
+          display: grid;
+
+          grid-template-columns:
+            minmax(0, 1fr);
+
+          grid-template-rows:
+            minmax(0, 45fr)
+            minmax(0, 55fr);
+
+          min-width: 0;
+          min-height: 0;
+
+          gap: 12px;
+        }
+
+        /* =====================================
+           TOP RIGHT: NUTRITION
+        ===================================== */
+
+        .sustansya-content.smart-lunchbox-active
+        .smart-nutrition-panel {
+          grid-column: 1;
+          grid-row: 1;
+
+          min-width: 0;
+          min-height: 0;
+        }
+
+        /* =====================================
+           BOTTOM RIGHT: COMPARTMENT DETAILS
+        ===================================== */
+
+        .sustansya-content.smart-lunchbox-active
         .smart-details-panel {
+          grid-column: 1;
+          grid-row: 2;
+
           min-width: 0;
           min-height: 0;
         }
 
         /* =====================================
            TALL DESKTOP SCREENS
-           ===================================== */
+        ===================================== */
 
         @media (min-height: 1000px) {
+
           .sb-lunchbox-scale {
             zoom: 0.73;
           }
+
         }
 
         /* =====================================
            SHORT DESKTOP SCREENS
-           ===================================== */
+        ===================================== */
 
         @media (max-height: 800px) {
+
           .sustansya-workspace {
             padding: 9px 18px;
           }
@@ -1051,6 +1758,7 @@ function App() {
             grid-template-rows:
               minmax(0, 50fr)
               minmax(0, 50fr);
+
             gap: 12px;
           }
 
@@ -1074,32 +1782,56 @@ function App() {
             zoom: 0.72;
           }
 
-          .smart-lunchbox-active .smart-layout {
+          .sustansya-content.smart-lunchbox-active
+          .smart-layout {
             gap: 10px;
           }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-right-column {
+            gap: 9px;
+          }
+
         }
 
         /* =====================================
            VERY SHORT SCREENS
-           ===================================== */
+        ===================================== */
 
         @media (max-height: 650px) {
+
           .sb-lunchbox-scale {
             zoom: 0.46;
           }
+
         }
 
         /* =====================================
            TABLET AND SMALL SCREENS
-           ===================================== */
+        ===================================== */
 
         @media (max-width: 950px) {
+
           .sustansya-workspace {
             padding: 14px;
           }
 
+          .sb-header-actions {
+            gap: 8px;
+          }
+
+        }
+
+        /* =====================================
+           SMART LUNCHBOX RESPONSIVE FALLBACK
+        ===================================== */
+
+        @media (max-width: 950px),
+               (max-height: 560px) {
+
           .sustansya-content.smart-lunchbox-active {
             height: auto;
+
             overflow-x: hidden;
             overflow-y: auto;
           }
@@ -1107,33 +1839,72 @@ function App() {
           .sustansya-content.smart-lunchbox-active
           > .smart-page {
             height: auto;
+
             min-height: 0;
+
             flex: none;
+
             overflow: visible;
           }
 
-          .smart-lunchbox-active .smart-layout {
-            display: grid;
-            grid-template-columns: 1fr;
-            grid-template-rows: auto;
+          .sustansya-content.smart-lunchbox-active
+          .smart-layout {
             flex: none;
+
+            display: grid;
+
+            grid-template-columns:
+              minmax(0, 1fr);
+
+            grid-template-rows:
+              auto auto;
+
+            overflow: visible;
           }
 
-          .smart-lunchbox-active
+          .sustansya-content.smart-lunchbox-active
           .smart-lunchbox-panel {
             grid-column: 1;
+            grid-row: 1;
+
+            min-height: 400px;
           }
 
-          .sb-header-actions {
-            gap: 8px;
+          .sustansya-content.smart-lunchbox-active
+          .smart-lunchbox-stage {
+            min-height: 375px;
           }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-right-column {
+            grid-column: 1;
+            grid-row: 2;
+
+            grid-template-columns:
+              minmax(0, 1fr);
+
+            grid-template-rows:
+              auto auto;
+          }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-nutrition-panel {
+            min-height: 240px;
+          }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-details-panel {
+            min-height: 260px;
+          }
+
         }
 
         /* =====================================
            DASHBOARD MOBILE
-           ===================================== */
+        ===================================== */
 
         @media (max-width: 900px) {
+
           .sustansya-content.dashboard-active {
             overflow-y: auto;
             overflow-x: hidden;
@@ -1146,9 +1917,12 @@ function App() {
           .sb-dashboard {
             display: flex;
             flex-direction: column;
+
             height: auto;
             min-height: 100%;
+
             gap: 16px;
+
             overflow: visible;
           }
 
@@ -1180,19 +1954,22 @@ function App() {
           .sb-lunchbox-scale {
             zoom: 1;
           }
+
         }
 
         /* =====================================
            SMALL MOBILE
-           ===================================== */
+        ===================================== */
 
         @media (max-width: 600px) {
+
           .sustansya-workspace {
             padding: 10px;
           }
 
           .sb-page-header {
             gap: 8px;
+
             flex-wrap: wrap;
           }
 
@@ -1208,26 +1985,44 @@ function App() {
             width: 36px;
             height: 36px;
           }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-layout {
+            gap: 10px;
+          }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-lunchbox-panel {
+            min-height: 330px;
+          }
+
+          .sustansya-content.smart-lunchbox-active
+          .smart-lunchbox-stage {
+            min-height: 310px;
+          }
+
         }
+
       `}</style>
 
       {/* =====================================
           OPENING ANIMATION
-          ===================================== */}
+      ===================================== */}
 
       <AnimatePresence>
+
         {showOpening && (
           <OpeningAnimation
-            onComplete={() =>
-              setShowOpening(false)
-            }
+            key="sustansyabox-opening"
+            onComplete={handleOpeningComplete}
           />
         )}
+
       </AnimatePresence>
 
       {/* =====================================
           SIDEBAR
-          ===================================== */}
+      ===================================== */}
 
       <Sidebar
         activePage={activePage}
@@ -1236,12 +2031,13 @@ function App() {
 
       {/* =====================================
           MAIN WORKSPACE
-          ===================================== */}
+      ===================================== */}
 
       <main className="sustansya-workspace">
-        {/* =====================================
+
+        {/* ===================================
             PAGE HEADER
-            ===================================== */}
+        =================================== */}
 
         <header
           className={`sb-page-header ${
@@ -1250,9 +2046,13 @@ function App() {
               : ''
           }`}
         >
+
           <div>
+
             {isDashboard ? (
+
               <div className="sb-dashboard-welcome">
+
                 <h1
                   style={{
                     color: darkMode
@@ -1268,90 +2068,130 @@ function App() {
                   nutrition, and stay connected
                   to your smart lunchbox.
                 </p>
+
               </div>
+
             ) : (
+
               <h1 className="sb-page-title">
                 {activePage}
               </h1>
+
             )}
+
           </div>
 
-          {/* =====================================
+          {/* =================================
               HEADER ACTIONS
-              ===================================== */}
+          ================================= */}
 
           <div className="sb-header-actions">
-            {/* DEVICE CONNECTION PREVIEW */}
 
-            <button
-              type="button"
+            {/* ===============================
+                REAL ESP32 CONNECTION
+            =============================== */}
+
+            <div
+
               className={`sb-device-status ${
                 deviceConnected
                   ? 'is-connected'
                   : ''
               }`}
-              onClick={() =>
-                setDeviceConnected(
-                  (connected) => !connected
-                )
-              }
-              aria-label={`Device ${
+
+              role="status"
+
+              aria-live="polite"
+
+              aria-label={`ESP32 ${
                 deviceConnected
                   ? 'online'
                   : 'offline'
-              }. Toggle preview status`}
-              title="Device connection preview — click to toggle"
+              }`}
+
+              title={
+                deviceInitializing
+                  ? 'BiteWise connected. Sensor initializing.'
+                  : deviceConnected
+                    ? 'Connected to BiteWise ESP32'
+                    : 'Automatically reconnecting to BiteWise ESP32'
+              }
+
             >
+
               <span
                 className="sb-device-dot"
                 aria-hidden="true"
               />
 
               <span>
+
                 {deviceConnected
                   ? 'Online'
                   : 'Offline'}
-              </span>
-            </button>
 
-            {/* SIGNAL BARS */}
+              </span>
+
+            </div>
+
+            {/* ===============================
+                CONNECTION SIGNAL BARS
+            =============================== */}
 
             <svg
               className="sb-signal-icon"
               viewBox="0 0 20 20"
               aria-hidden="true"
             >
+
               {[5, 8, 12, 16].map(
                 (height, index) => (
+
                   <rect
                     key={index}
+
                     x={1 + index * 5}
+
                     y={18 - height}
+
                     width="3.4"
+
                     height={height}
+
                     rx="1"
+
                     fill={
                       deviceConnected
                         ? '#4FAD73'
                         : '#9CA3AF'
                     }
                   />
+
                 )
               )}
+
             </svg>
 
-            {/* BATTERY */}
+            {/* ===============================
+                BATTERY STATUS
+            =============================== */}
 
             <svg
+
               className="sb-battery-icon"
+
               viewBox="0 0 40 24"
+
               role="img"
+
               aria-label={
                 batteryPercentage === null
                   ? 'Battery unavailable'
-                  : `Battery ${batteryPercentage}% (preview)`
+                  : `Battery ${batteryPercentage}%`
               }
+
             >
+
               <rect
                 x="1.5"
                 y="4"
@@ -1381,30 +2221,50 @@ function App() {
                 dominantBaseline="middle"
                 fill="currentColor"
               >
+
                 {batteryPercentage === null
                   ? '—'
                   : `${batteryPercentage}%`}
+
               </text>
+
             </svg>
 
-            {/* NOTIFICATIONS */}
+            {/* ===============================
+                NOTIFICATIONS
+            =============================== */}
 
             <NotificationBell
+
               caloriesConsumed={
                 PREVIEW_NUTRITION.calories
               }
-              caloriesGoal={calorieGoal}
+
+              caloriesGoal={
+                calorieGoal
+              }
+
               sugarConsumed={
                 PREVIEW_NUTRITION.sugar
               }
-              sugarGoal={sugarGoal}
+
+              sugarGoal={
+                sugarGoal
+              }
+
               sodiumConsumed={
                 PREVIEW_NUTRITION.sodium
               }
-              sodiumGoal={sodiumGoal}
+
+              sodiumGoal={
+                sodiumGoal
+              }
+
             />
 
-            {/* DARK MODE */}
+            {/* ===============================
+                DARK MODE
+            =============================== */}
 
             <button
               type="button"
@@ -1412,20 +2272,25 @@ function App() {
               onClick={toggleTheme}
               aria-label="Toggle theme"
             >
+
               {darkMode ? (
                 <Sun size={20} />
               ) : (
                 <Moon size={20} />
               )}
+
             </button>
+
           </div>
+
         </header>
 
-        {/* =====================================
+        {/* ===================================
             PAGE CONTENT
-            ===================================== */}
+        =================================== */}
 
         <div
+
           className={`sustansya-content ${
             isSmartLunchbox
               ? 'smart-lunchbox-active'
@@ -1433,70 +2298,134 @@ function App() {
                 ? 'dashboard-active'
                 : 'other-page-active'
           }`}
+
         >
-          {/* DASHBOARD */}
+
+          {/* =================================
+              DASHBOARD
+          ================================= */}
 
           {activePage === 'Dashboard' && (
+
             <Dashboard
+
               calorieGoal={calorieGoal}
+
               sugarGoal={sugarGoal}
+
               sodiumGoal={sodiumGoal}
+
               meals={meals}
+
+              deviceOnline={esp32.connected}
+
+              liveWeight={esp32.weight}
+
             />
+
           )}
 
-          {/* SMART LUNCHBOX */}
+          {/* =================================
+              SMART LUNCHBOX
+
+              Uses the same real ESP32
+              connection as the Dashboard.
+          ================================= */}
 
           {activePage === 'Smart Lunchbox' && (
-            <SmartLunchbox />
+
+            <SmartLunchbox
+
+              deviceOnline={esp32.connected}
+
+              liveWeight={esp32.weight}
+
+              sensorReady={esp32.ready}
+
+            />
+
           )}
 
-          {/* MEAL HISTORY */}
+          {/* =================================
+              MEAL HISTORY
+          ================================= */}
 
           {activePage === 'Meal History' && (
+
             <MealHistory
+
               meals={meals}
+
               setMeals={setMeals}
+
             />
+
           )}
 
-          {/* MEAL PLANNER */}
+          {/* =================================
+              MEAL PLANNER
+          ================================= */}
 
           {activePage === 'Meal Planner' && (
+
             <MealPlanner />
+
           )}
 
-          {/* RECIPES */}
+          {/* =================================
+              RECIPES
+          ================================= */}
 
           {activePage === 'Recipes' && (
+
             <Recipes />
+
           )}
 
-          {/* NUTRITION REPORTS */}
+          {/* =================================
+              NUTRITION REPORTS
+          ================================= */}
 
           {activePage === 'Nutrition Reports' && (
+
             <NutritionReports />
+
           )}
 
-          {/* ABOUT US */}
+          {/* =================================
+              ABOUT US
+          ================================= */}
 
           {activePage === 'About Us' && (
+
             <AboutUsPreview />
+
           )}
 
-          {/* SETTINGS */}
+          {/* =================================
+              SETTINGS
+          ================================= */}
 
           {activePage === 'Settings' && (
+
             <UserProfile
+
               profile={profile}
+
               onSave={handleSaveProfile}
+
               onBack={() =>
                 setActivePage('Smart Lunchbox')
               }
+
             />
+
           )}
+
         </div>
+
       </main>
+
     </div>
   )
 }
