@@ -64,3 +64,64 @@ export async function registerUser(
 
   return result
 }
+
+export interface GoogleRegisterRequest {
+  credential: string
+  age: number
+  height: number
+  weight: number
+}
+
+export interface GoogleRegisterResponse {
+  success: boolean
+  message?: string
+  user?: {
+    user_id: number
+    full_name: string
+    email: string
+    age: number | null
+    height: number | null
+    weight: number | null
+  }
+}
+
+export async function registerGoogleUser(
+  data: GoogleRegisterRequest
+): Promise<GoogleRegisterResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/google_register.php`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    }
+  )
+
+  const contentType =
+    response.headers.get('content-type') ?? ''
+
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      'The Google registration server did not return JSON. Check your PHP file and API URL.'
+    )
+  }
+
+  const result: GoogleRegisterResponse =
+    await response.json()
+
+  if (
+    !response.ok ||
+    result.success !== true ||
+    !result.user
+  ) {
+    throw new Error(
+      result.message ||
+        'Unable to create your Google account.'
+    )
+  }
+
+  return result
+}

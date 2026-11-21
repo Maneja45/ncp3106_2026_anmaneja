@@ -59,7 +59,16 @@ export interface TeamLanyardRailProps extends React.ComponentProps<"section"> {
 }
 
 const RATIO = 96 / 62;
-const MAX_W = 124;
+/** Largest badge width in px. Raised from 124 so the IDs are big enough to read. */
+const MAX_W = 260;
+/** Space (px) kept for the page title, heading and caption so the page never scrolls. */
+const RESERVED_HEIGHT = 330;
+/** Rail height ÷ badge width with the shorter lanyards below (used to fit the viewport height). */
+const HEIGHT_PER_W = 2.6;
+/** Lanyard length multiplier — shorter straps leave more room for the ID itself. */
+const STRAP_SCALE = 0.6;
+/** Badge width the lanyard parts were tuned for; strap, reel and clip scale from this. */
+const REF_W = 124;
 const MIN_RAIL_W = 100;
 const EM = 11.2;
 const RAIL_PITCH_MIN = 1.16;
@@ -149,7 +158,7 @@ function soft(distance: number, max: number) {
 }
 
 function geometry(W: number, items: LanyardMember[]) {
-  const u = W / MAX_W;
+  const u = W / REF_W;
   const H = W * RATIO;
   const railR = Math.max(3, 4.2 * u);
   const railY = 14 + railR;
@@ -161,8 +170,8 @@ function geometry(W: number, items: LanyardMember[]) {
   const cordRest = 12 * u;
   const clipH = 13 * u;
   const clipW = 30 * u;
-  const base = 56 * u;
-  const straps = items.map((item, i) => base + Math.max(0, item.drop ?? DROPS[i % DROPS.length] ?? 0) * u);
+  const base = 56 * STRAP_SCALE * u;
+  const straps = items.map((item, i) => base + Math.max(0, item.drop ?? DROPS[i % DROPS.length] ?? 0) * STRAP_SCALE * u);
   const reelTops = straps.map((len) => pivotY + len + crimp * 0.6);
   const clipTops = reelTops.map((top) => top + reel * 0.82 + cordRest);
   const cardTops = clipTops.map((top) => top + clipH * 0.62);
@@ -334,14 +343,14 @@ const BadgeFaces = React.memo(function BadgeFaces({ item, tone }: { item: Lanyar
       <span data-face="front" className="absolute inset-0 flex flex-col items-center overflow-hidden rounded-[0.85em] border border-border bg-card px-[0.8em] pb-[0.7em] text-card-foreground [backface-visibility:hidden]" style={{ transform: "translateZ(1px)" }}>
         <Band tone={tone} tall />
         <Hole />
-        <span className="relative mt-[2.05em] block size-[5.3em] shrink-0 rounded-full bg-card p-[0.2em]" style={{ boxShadow: "0 0.15em 0.5em color-mix(in oklab, var(--color-foreground) 22%, transparent)" }}>
+        <span className="relative mt-[2.05em] block size-[4.8em] shrink-0 rounded-full bg-card p-[0.2em]" style={{ boxShadow: "0 0.15em 0.5em color-mix(in oklab, var(--color-foreground) 22%, transparent)" }}>
           <span className="relative block size-full overflow-hidden rounded-full bg-muted">
             <Silhouette />
             {!failed && <img src={item.image} alt="" draggable={false} decoding="async" onError={() => setFailed(true)} className="pointer-events-none absolute inset-0 block size-full select-none object-cover" />}
           </span>
         </span>
-        <span className="mt-[0.55em] block w-full truncate text-center text-[1.08em] font-semibold leading-tight tracking-tight">{item.name}</span>
-        <span className="mt-[0.15em] block w-full truncate text-center text-[0.8em] leading-snug text-muted-foreground">{item.role}</span>
+        <span className="mt-[0.5em] line-clamp-2 w-full shrink-0 overflow-hidden break-words text-center text-[1.02em] font-semibold leading-[1.15] tracking-tight">{item.name}</span>
+        <span className="mt-[0.2em] line-clamp-2 w-full shrink-0 overflow-hidden break-words text-center text-[0.74em] leading-[1.3] text-muted-foreground">{item.role}</span>
         {item.team && <span className="mt-[0.5em] block w-full truncate text-center text-[0.6em] font-medium uppercase tracking-[0.2em] text-muted-foreground">{item.team}</span>}
         <span className="mt-auto block w-full border-t border-dashed border-border pt-[0.5em]">
           <svg aria-hidden="true" viewBox={`0 0 ${bars.width} 20`} preserveAspectRatio="none" className="block h-[1.6em] w-full text-foreground/80">
@@ -480,7 +489,8 @@ export function TeamLanyardRail({
     if (!stage) return;
     const measure = (width: number) => {
       const n = Math.max(1, live.current.count);
-      const railW = Math.min(MAX_W, (width - 40) / (n * RAIL_PITCH_MIN + 0.4));
+      const fitHeight = (window.innerHeight - RESERVED_HEIGHT) / HEIGHT_PER_W;
+      const railW = Math.min(MAX_W, Math.max(MIN_RAIL_W, fitHeight), (width - 40) / (n * RAIL_PITCH_MIN + 0.4));
       const carousel = railW < MIN_RAIL_W;
       const W = Math.round((carousel ? clamp(width * 0.3, 96, 118) : railW) * 4) / 4;
       setSize((old) => (Math.abs(old.width - width) < 0.5 && old.carousel === carousel && old.W === W ? old : { width, W, carousel }));
@@ -488,7 +498,9 @@ export function TeamLanyardRail({
     measure(stage.clientWidth);
     const observer = new ResizeObserver((entries) => { const box = entries[0]; if (box) measure(box.contentRect.width); });
     observer.observe(stage);
-    return () => observer.disconnect();
+    const onResize = () => measure(stage.clientWidth);
+    window.addEventListener("resize", onResize);
+    return () => { observer.disconnect(); window.removeEventListener("resize", onResize); };
   }, [count]);
 
   const paint = React.useCallback((i: number) => {
@@ -1143,8 +1155,8 @@ export function TeamLanyardRail({
 
       <div className="relative z-10 flex flex-col items-center gap-3 px-6 pb-7 pt-3 text-center">
         <div id={`${uid}-caption`} aria-live="polite" className="min-h-[2.6rem]">
-          <p className="text-sm font-medium">{line1}</p>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">{line2}</p>
+          <p className="text-base font-medium">{line1}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{line2}</p>
           {showingBack && person?.bio && <span className="sr-only">{person.bio}</span>}
         </div>
         {action}

@@ -94,6 +94,7 @@ type DashboardPage =
 
 type LoginResponse = {
   success: boolean
+  profileRequired?: boolean
   message?: string
   user?: {
     user_id?: number
@@ -217,6 +218,34 @@ async function loginWithBackend(
 }
 
 // ============================================
+// GOOGLE LOGIN API
+// ============================================
+
+async function loginWithGoogleBackend(
+  credential: string
+): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/google_login.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ credential }),
+  })
+
+  if (!(response.headers.get('content-type') ?? '').includes('application/json')) {
+    throw new Error('Google login server is not configured correctly.')
+  }
+
+  const result: LoginResponse = await response.json()
+  if (result.profileRequired === true) {
+    return result
+  }
+  if (!response.ok || result.success !== true || !result.user) {
+    throw new Error(result.message || 'Unable to sign in with Google.')
+  }
+  return result
+}
+
+// ============================================
 // MAIN APPLICATION
 // ============================================
 
@@ -257,6 +286,10 @@ function App() {
 
   const [registeredMessage, setRegisteredMessage] =
     useState<string>('')
+
+  // Keep a new user's Google token in memory only until registration.
+  const [pendingGoogleCredential, setPendingGoogleCredential] =
+    useState<string | null>(null)
 
   // ==========================================
   // APPEARANCE
@@ -798,14 +831,98 @@ function App() {
   }
 
   // ==========================================
+  // GOOGLE AUTHENTICATION HANDLER
+  // ==========================================
+
+  const handleGoogleLogin = async (credential: string): Promise<void> => {
+    if (loginLoading) return
+    setLoginError('')
+    setRegisteredMessage('')
+    setLoginLoading(true)
+    try {
+      const result = await loginWithGoogleBackend(credential)
+      if (result.profileRequired) {
+        setPendingGoogleCredential(credential)
+        setAuthPage('register')
+        return
+      }
+      const user = result.user
+      if (!user?.user_id || !user.email) {
+        throw new Error('Google account verification failed.')
+      }
+      try {
+        localStorage.removeItem(PROFILE_STORAGE_KEY)
+      } catch {
+        // Continue without browser storage.
+      }
+      setProfile({
+        ...initialProfile,
+        fullName: user.full_name ?? '',
+        email: user.email,
+        age: user.age != null ? String(user.age) : '',
+        height: user.height != null ? String(user.height) : '',
+        weight: user.weight != null ? String(user.weight) : '',
+      })
+      setMeals(sampleMeals)
+      setEsp32(INITIAL_ESP32_STATE)
+      setActivePage('Smart Lunchbox')
+      setShowOpening(true)
+      setIsLoggedIn(true)
+      setPendingEmail('')
+      setPendingGoogleCredential(null)
+      setAuthPage('login')
+    } catch (error: unknown) {
+      setLoginError(error instanceof TypeError
+        ? 'Cannot connect to the authentication server. Please check XAMPP.'
+        : error instanceof Error ? error.message : 'Google Sign-In failed. Please try again.')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  // ==========================================
   // REGISTRATION
   // ==========================================
+
+  const handleGoogleRegistered = (user: {
+    user_id: number
+    full_name: string
+    email: string
+    age: number | null
+    height: number | null
+    weight: number | null
+  }): void => {
+    if (!user.user_id || !user.email) return
+    try {
+      localStorage.removeItem(PROFILE_STORAGE_KEY)
+    } catch {
+      // Continue without browser storage.
+    }
+    setProfile({
+      ...initialProfile,
+      fullName: user.full_name,
+      email: user.email,
+      age: user.age != null ? String(user.age) : '',
+      height: user.height != null ? String(user.height) : '',
+      weight: user.weight != null ? String(user.weight) : '',
+    })
+    setMeals(sampleMeals)
+    setEsp32(INITIAL_ESP32_STATE)
+    setActivePage('Smart Lunchbox')
+    setPendingGoogleCredential(null)
+    setPendingEmail('')
+    setLoginError('')
+    setShowOpening(true)
+    setIsLoggedIn(true)
+    setAuthPage('login')
+  }
 
   const handleRegister = (
     data: RegistrationData
   ): void => {
 
     setPendingEmail(data.email)
+    setPendingGoogleCredential(null)
 
     setRegisteredMessage(
       'Your account has been created successfully. Please sign in.'
@@ -998,10 +1115,12 @@ function App() {
             >
               <Login
                 onLogin={handleLogin}
+                onGoogleLogin={handleGoogleLogin}
 
                 onRegister={() => {
                   setLoginError('')
                   setRegisteredMessage('')
+                  setPendingGoogleCredential(null)
                   setAuthPage('register')
                 }}
 
@@ -1040,9 +1159,12 @@ function App() {
             >
               <Register
                 onRegister={handleRegister}
+                googleCredential={pendingGoogleCredential}
+                onGoogleRegistered={handleGoogleRegistered}
 
                 onBackToLogin={() => {
                   setAuthPage('login')
+                  setPendingGoogleCredential(null)
                   setLoginError('')
                 }}
               />

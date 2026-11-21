@@ -1,6 +1,6 @@
-
 import { useState, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import Velaris from '../ui/velaris'
 import {
   UserRound,
   Mail,
@@ -14,9 +14,7 @@ import {
   CalendarDays,
   Leaf,
 } from 'lucide-react'
-
-import { registerUser } from '../services/api'
-
+import { registerUser, registerGoogleUser, type GoogleRegisterResponse } from '../services/api'
 export type RegistrationData = {
   fullName: string
   email: string
@@ -25,21 +23,23 @@ export type RegistrationData = {
   height: number
   weight: number
 }
-
 type RegisterProps = {
   onRegister?: (data: RegistrationData) => void
   onBackToLogin?: () => void
+  googleCredential?: string | null
+  onGoogleRegistered?: (user: NonNullable<GoogleRegisterResponse['user']>) => void
 }
-
 const fadeUp = {
   hidden: { opacity: 0, y: 22 },
   visible: { opacity: 1, y: 0 },
 }
-
 export default function Register({
   onRegister,
   onBackToLogin,
+  googleCredential,
+  onGoogleRegistered,
 }: RegisterProps) {
+  const isGoogleRegistration = Boolean(googleCredential)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -47,69 +47,50 @@ export default function Register({
   const [age, setAge] = useState('')
   const [height, setHeight] = useState('')
   const [weight, setWeight] = useState('')
-
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false)
-
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
   ): Promise<void> => {
     event.preventDefault()
-
     if (isSubmitting) return
-
     setError('')
     setSuccess('')
-
     const name = fullName.trim()
     const userEmail = email.trim().toLowerCase()
     const userAge = Number(age)
     const userHeight = Number(height)
     const userWeight = Number(weight)
-
-    if (
-      !name ||
-      !userEmail ||
-      !password ||
-      !confirmPassword ||
-      !age ||
-      !height ||
-      !weight
-    ) {
-      setError('Please complete all required fields.')
+    if (!age || !height || !weight) {
+      setError('Please complete all required profile fields.')
       return
     }
-
-    if (name.length < 2 || name.length > 100) {
-      setError('Please enter a valid full name.')
-      return
+    if (!isGoogleRegistration) {
+      if (!name || !userEmail || !password || !confirmPassword) {
+        setError('Please complete all required fields.')
+        return
+      }
+      if (name.length < 2 || name.length > 100) {
+        setError('Please enter a valid full name.')
+        return
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail) || userEmail.length > 150) {
+        setError('Please enter a valid email address.')
+        return
+      }
+      if (password.length < 8) {
+        setError('Your password must contain at least 8 characters.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setError('Your passwords do not match.')
+        return
+      }
     }
-
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail) ||
-      userEmail.length > 150
-    ) {
-      setError('Please enter a valid email address.')
-      return
-    }
-
-    if (password.length < 8) {
-      setError(
-        'Your password must contain at least 8 characters.'
-      )
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('Your passwords do not match.')
-      return
-    }
-
     if (
       !Number.isInteger(userAge) ||
       userAge < 13 ||
@@ -118,7 +99,6 @@ export default function Register({
       setError('Please enter a valid age between 13 and 120.')
       return
     }
-
     if (
       !Number.isFinite(userHeight) ||
       userHeight < 80 ||
@@ -127,7 +107,6 @@ export default function Register({
       setError('Please enter a valid height in centimeters.')
       return
     }
-
     if (
       !Number.isFinite(userWeight) ||
       userWeight < 15 ||
@@ -136,32 +115,32 @@ export default function Register({
       setError('Please enter a valid weight in kilograms.')
       return
     }
-
-    const registrationData: RegistrationData = {
-      fullName: name,
-      email: userEmail,
-      password,
-      age: userAge,
-      height: userHeight,
-      weight: userWeight,
-    }
-
     setIsSubmitting(true)
-
     try {
-      await registerUser(registrationData)
-
-      setSuccess(
-        'Account created successfully! You can now sign in.'
-      )
-
-      setPassword('')
-      setConfirmPassword('')
-
-      // Keep the existing App.tsx callback compatible.
-      // Only run it after the PHP backend confirms success.
-      if (onRegister) {
-        onRegister(registrationData)
+      if (isGoogleRegistration && googleCredential) {
+        const result = await registerGoogleUser({
+          credential: googleCredential,
+          age: userAge,
+          height: userHeight,
+          weight: userWeight,
+        })
+        if (!result.user) throw new Error('Google registration did not return an account.')
+        setSuccess('Google account created successfully!')
+        onGoogleRegistered?.(result.user)
+      } else {
+        const registrationData: RegistrationData = {
+          fullName: name,
+          email: userEmail,
+          password,
+          age: userAge,
+          height: userHeight,
+          weight: userWeight,
+        }
+        await registerUser(registrationData)
+        setSuccess('Account created successfully! You can now sign in.')
+        setPassword('')
+        setConfirmPassword('')
+        onRegister?.(registrationData)
       }
     } catch (caughtError: unknown) {
       if (caughtError instanceof TypeError) {
@@ -179,20 +158,17 @@ export default function Register({
       setIsSubmitting(false)
     }
   }
-
   return (
     <div className="register-page">
       <style>{`
         .register-page,
-        .register-page * {
+        .register-page \* {
           box-sizing: border-box;
         }
-
         .register-page {
           --reg-cream: #f8f8f3;
           --reg-ink: #1c362b;
           --reg-green: #45634d;
-
           display: grid;
           grid-template-columns: 1fr 1fr;
           width: 100%;
@@ -202,12 +178,10 @@ export default function Register({
           font-family: 'DM Sans', 'Inter', sans-serif;
           overflow: hidden;
         }
-
         .register-page button,
         .register-page input {
           font: inherit;
         }
-
         .register-hero {
           position: relative;
           isolation: isolate;
@@ -226,7 +200,23 @@ export default function Register({
           overflow: hidden;
           min-height: 100dvh;
         }
-
+        /* Same animated Velaris background as the Login page. */
+        .register-velaris-bg {
+          position: absolute !important;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 0;
+          pointer-events: none;
+          overflow: hidden;
+        }
+        .register-hero > :not(.register-velaris-bg) {
+          position: relative;
+          z-index: 1;
+        }
+        .register-hero::before {
+          display: none;
+        }
         .register-hero::before {
           content: '';
           position: absolute;
@@ -252,7 +242,6 @@ export default function Register({
           animation: register-glow 11s ease-in-out infinite alternate;
           pointer-events: none;
         }
-
         .register-hero::after {
           content: '';
           position: absolute;
@@ -266,31 +255,26 @@ export default function Register({
             );
           pointer-events: none;
         }
-
         @keyframes register-glow {
           from {
             transform: translate(-3%, 1%) scale(1);
             opacity: .7;
           }
-
           to {
             transform: translate(5%, -3%) scale(1.15);
             opacity: 1;
           }
         }
-
         .register-logo {
           font-size: 20px;
           font-weight: 800;
           letter-spacing: -.8px;
         }
-
         .register-hero-copy {
           max-width: 560px;
           margin: auto 0;
           padding: 35px 0;
         }
-
         .register-leaf {
           width: 48px;
           height: 48px;
@@ -302,7 +286,6 @@ export default function Register({
           backdrop-filter: blur(10px);
           margin-bottom: 26px;
         }
-
         .register-hero-title {
           font-family: Georgia, 'Times New Roman', serif;
           font-weight: 700;
@@ -311,7 +294,6 @@ export default function Register({
           letter-spacing: -2.2px;
           margin: 0 0 22px;
         }
-
         .register-hero-description {
           max-width: 440px;
           font-size: 14px;
@@ -319,12 +301,10 @@ export default function Register({
           color: rgba(247,248,243,.81);
           margin: 0;
         }
-
         .register-hero-footer {
           font-size: 11px;
           color: rgba(247,248,243,.65);
         }
-
         .register-form-side {
           display: flex;
           align-items: center;
@@ -333,12 +313,10 @@ export default function Register({
           min-width: 0;
           background: var(--reg-cream);
         }
-
         .register-form-inner {
           width: 100%;
           max-width: 410px;
         }
-
         .register-back {
           display: inline-flex;
           align-items: center;
@@ -352,13 +330,11 @@ export default function Register({
           padding: 0;
           margin-bottom: 21px;
         }
-
         .register-back:disabled,
         .register-signin:disabled {
           opacity: .45;
           cursor: not-allowed;
         }
-
         .register-eyebrow {
           color: #45634d;
           font-size: 10px;
@@ -366,7 +342,6 @@ export default function Register({
           font-weight: 800;
           margin: 0 0 9px;
         }
-
         .register-heading {
           font-family: Georgia, 'Times New Roman', serif;
           font-size: clamp(26px, 2.2vw, 34px);
@@ -374,29 +349,24 @@ export default function Register({
           line-height: 1.2;
           margin: 0 0 10px;
         }
-
         .register-subtitle {
           color: #7b8980;
           font-size: 12px;
           margin: 0 0 22px;
           line-height: 1.6;
         }
-
         .register-field {
           margin-bottom: 12px;
         }
-
         .register-label {
           display: block;
           font-size: 11px;
           font-weight: 750;
           margin-bottom: 7px;
         }
-
         .register-input-wrap {
           position: relative;
         }
-
         .register-input-icon {
           position: absolute;
           top: 50%;
@@ -405,7 +375,6 @@ export default function Register({
           color: #819588;
           pointer-events: none;
         }
-
         .register-input {
           width: 100%;
           height: 43px;
@@ -421,21 +390,17 @@ export default function Register({
             box-shadow .2s,
             transform .2s;
         }
-
         .register-input::placeholder {
           color: #96a09a;
         }
-
         .register-input:focus {
           border-color: #6e9976;
           box-shadow: 0 0 0 4px rgba(110,153,118,.12);
         }
-
         .register-input:disabled {
           opacity: .65;
           cursor: not-allowed;
         }
-
         .register-password-toggle {
           position: absolute;
           right: 11px;
@@ -449,44 +414,36 @@ export default function Register({
           place-items: center;
           padding: 5px;
         }
-
         .register-password-toggle:disabled {
           cursor: not-allowed;
           opacity: .5;
         }
-
         .register-personal {
           border-top: 1px solid #dfe6dd;
           padding-top: 15px;
           margin-top: 17px;
         }
-
         .register-personal h3 {
           font-size: 13px;
           margin: 0 0 5px;
         }
-
         .register-personal p {
           color: #849087;
           font-size: 11px;
           line-height: 1.5;
           margin: 0 0 13px;
         }
-
         .register-metrics {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 10px;
         }
-
         .register-metrics .register-input {
           padding-left: 34px;
         }
-
         .register-metrics .register-input-icon {
           left: 10px;
         }
-
         .register-error {
           background: #fff0ed;
           border: 1px solid #f2d0ca;
@@ -496,7 +453,6 @@ export default function Register({
           font-size: 11px;
           margin: 14px 0;
         }
-
         .register-success {
           background: #edf7ef;
           border: 1px solid #bddac3;
@@ -506,7 +462,6 @@ export default function Register({
           font-size: 11px;
           margin: 14px 0;
         }
-
         .register-submit {
           width: 100%;
           height: 46px;
@@ -527,24 +482,20 @@ export default function Register({
             background .2s,
             box-shadow .2s;
         }
-
         .register-submit:hover:not(:disabled) {
           background: #36543f;
           box-shadow: 0 10px 24px rgba(69,99,77,.22);
         }
-
         .register-submit:disabled {
           opacity: .7;
           cursor: wait;
         }
-
         .register-bottom {
           text-align: center;
           color: #87938a;
           font-size: 11px;
           margin: 17px 0 0;
         }
-
         .register-signin {
           background: none;
           border: 0;
@@ -553,93 +504,85 @@ export default function Register({
           font-weight: 800;
           cursor: pointer;
         }
-
         @media (max-height: 760px) and (min-width: 801px) {
           .register-form-side {
             padding-top: 14px;
             padding-bottom: 14px;
           }
-
           .register-back {
             margin-bottom: 10px;
           }
-
           .register-subtitle {
             margin-bottom: 12px;
           }
-
           .register-field {
             margin-bottom: 8px;
           }
-
           .register-input {
             height: 38px;
           }
-
           .register-personal {
             margin-top: 10px;
             padding-top: 10px;
           }
-
           .register-submit {
             margin-top: 11px;
           }
         }
-
         @media (max-width: 800px) {
           .register-page {
             grid-template-columns: 1fr;
             overflow: visible;
           }
-
           .register-hero {
             min-height: 300px;
             padding: 28px;
           }
-
           .register-hero-copy {
             padding: 35px 0;
           }
-
           .register-hero-title {
             font-size: clamp(37px, 7vw, 54px);
           }
-
           .register-form-side {
             padding: 35px 20px 45px;
           }
         }
-
         @media (max-width: 400px) {
           .register-metrics {
             gap: 6px;
           }
-
           .register-metrics .register-input {
             font-size: 11px;
             padding-left: 29px;
             padding-right: 5px;
           }
-
           .register-metrics .register-input-icon {
             left: 8px;
             width: 14px;
           }
         }
-
         @media (prefers-reduced-motion: reduce) {
           .register-hero::before {
             animation: none;
           }
-
-          .register-page *,
-          .register-page *::before {
+          .register-page \*,
+          .register-page \*::before {
             transition: none !important;
           }
         }
       `}</style>
-
       <aside className="register-hero">
+        <Velaris
+          bg="#14251C"
+          colors={["#45634D", "#78947A", "#253F30", "#101E16"]}
+          speed={1.1}
+          grain={0.18}
+          height="100%"
+          className="register-velaris-bg"
+        >
+          <span aria-hidden="true" />
+        </Velaris>
         <motion.div
           className="register-logo"
           initial={{ opacity: 0, y: -12 }}
@@ -648,7 +591,6 @@ export default function Register({
         >
           SustansyaBox.
         </motion.div>
-
         <div className="register-hero-copy">
           <motion.div
             className="register-leaf"
@@ -658,7 +600,6 @@ export default function Register({
           >
             <Leaf size={24} strokeWidth={1.7} />
           </motion.div>
-
           <motion.h1
             className="register-hero-title"
             variants={fadeUp}
@@ -670,7 +611,6 @@ export default function Register({
             <br />
             starts here.
           </motion.h1>
-
           <motion.p
             className="register-hero-description"
             variants={fadeUp}
@@ -682,7 +622,6 @@ export default function Register({
             goals, and make every meal count with SustansyaBox.
           </motion.p>
         </div>
-
         <motion.div
           className="register-hero-footer"
           initial={{ opacity: 0 }}
@@ -692,7 +631,6 @@ export default function Register({
           Smart Nutrition for a Healthier You
         </motion.div>
       </aside>
-
       <main className="register-form-side">
         <motion.div
           className="register-form-inner"
@@ -709,18 +647,18 @@ export default function Register({
             <ArrowLeft size={14} />
             Back to Sign In
           </button>
-
           <p className="register-eyebrow">GET STARTED</p>
-
           <h2 className="register-heading">
-            Create your account
+            {isGoogleRegistration ? 'Complete your Google profile' : 'Create your account'}
           </h2>
-
           <p className="register-subtitle">
-            Tell us a little about yourself to get started.
+            {isGoogleRegistration
+              ? 'Your name and email will come securely from Google. Complete the details below to finish signing up.'
+              : 'Tell us a little about yourself to get started.'}
           </p>
-
           <form onSubmit={handleSubmit} noValidate>
+            {!isGoogleRegistration && (
+              <>
             <div className="register-field">
               <label
                 className="register-label"
@@ -728,13 +666,11 @@ export default function Register({
               >
                 Full name
               </label>
-
               <div className="register-input-wrap">
                 <UserRound
                   className="register-input-icon"
                   size={16}
                 />
-
                 <input
                   id="register-name"
                   className="register-input"
@@ -749,7 +685,6 @@ export default function Register({
                 />
               </div>
             </div>
-
             <div className="register-field">
               <label
                 className="register-label"
@@ -757,13 +692,11 @@ export default function Register({
               >
                 Email address
               </label>
-
               <div className="register-input-wrap">
                 <Mail
                   className="register-input-icon"
                   size={16}
                 />
-
                 <input
                   id="register-email"
                   className="register-input"
@@ -778,7 +711,6 @@ export default function Register({
                 />
               </div>
             </div>
-
             <div className="register-field">
               <label
                 className="register-label"
@@ -786,13 +718,11 @@ export default function Register({
               >
                 Password
               </label>
-
               <div className="register-input-wrap">
                 <LockKeyhole
                   className="register-input-icon"
                   size={16}
                 />
-
                 <input
                   id="register-password"
                   className="register-input"
@@ -806,7 +736,6 @@ export default function Register({
                   style={{ paddingRight: 42 }}
                   disabled={isSubmitting}
                 />
-
                 <button
                   className="register-password-toggle"
                   type="button"
@@ -828,7 +757,6 @@ export default function Register({
                 </button>
               </div>
             </div>
-
             <div className="register-field">
               <label
                 className="register-label"
@@ -836,13 +764,11 @@ export default function Register({
               >
                 Confirm password
               </label>
-
               <div className="register-input-wrap">
                 <LockKeyhole
                   className="register-input-icon"
                   size={16}
                 />
-
                 <input
                   id="register-confirm"
                   className="register-input"
@@ -858,7 +784,6 @@ export default function Register({
                   style={{ paddingRight: 42 }}
                   disabled={isSubmitting}
                 />
-
                 <button
                   className="register-password-toggle"
                   type="button"
@@ -882,15 +807,14 @@ export default function Register({
                 </button>
               </div>
             </div>
-
+              </>
+            )}
             <section className="register-personal">
               <h3>Personal information</h3>
-
               <p>
                 This information will help personalize your
                 nutrition goals.
               </p>
-
               <div className="register-metrics">
                 <div>
                   <label
@@ -899,13 +823,11 @@ export default function Register({
                   >
                     Age
                   </label>
-
                   <div className="register-input-wrap">
                     <CalendarDays
                       className="register-input-icon"
                       size={16}
                     />
-
                     <input
                       id="register-age"
                       className="register-input"
@@ -922,7 +844,6 @@ export default function Register({
                     />
                   </div>
                 </div>
-
                 <div>
                   <label
                     className="register-label"
@@ -930,13 +851,11 @@ export default function Register({
                   >
                     Height
                   </label>
-
                   <div className="register-input-wrap">
                     <Ruler
                       className="register-input-icon"
                       size={16}
                     />
-
                     <input
                       id="register-height"
                       className="register-input"
@@ -953,7 +872,6 @@ export default function Register({
                     />
                   </div>
                 </div>
-
                 <div>
                   <label
                     className="register-label"
@@ -961,13 +879,11 @@ export default function Register({
                   >
                     Weight
                   </label>
-
                   <div className="register-input-wrap">
                     <Scale
                       className="register-input-icon"
                       size={16}
                     />
-
                     <input
                       id="register-weight"
                       className="register-input"
@@ -986,7 +902,6 @@ export default function Register({
                 </div>
               </div>
             </section>
-
             <AnimatePresence mode="wait">
               {error && (
                 <motion.p
@@ -1000,7 +915,6 @@ export default function Register({
                   {error}
                 </motion.p>
               )}
-
               {success && (
                 <motion.p
                   role="status"
@@ -1014,7 +928,6 @@ export default function Register({
                 </motion.p>
               )}
             </AnimatePresence>
-
             <motion.button
               className="register-submit"
               type="submit"
@@ -1027,18 +940,15 @@ export default function Register({
               }
             >
               {isSubmitting
-                ? 'Creating Account...'
+                ? (isGoogleRegistration ? 'Creating Google Account...' : 'Creating Account...')
                 : success
                   ? 'Account Created'
-                  : 'Create Account'}
-
+                  : (isGoogleRegistration ? 'Complete Google Registration' : 'Create Account')}
               {!isSubmitting && <ArrowRight size={17} />}
             </motion.button>
           </form>
-
           <p className="register-bottom">
             Already have an account?
-
             <button
               className="register-signin"
               type="button"

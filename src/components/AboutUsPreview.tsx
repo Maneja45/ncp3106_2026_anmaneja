@@ -1,4 +1,3 @@
-
 import TeamLanyardRail from "../ui/TeamLanyard";
 import type { LanyardMember } from "../ui/TeamLanyard";
 
@@ -69,20 +68,20 @@ export default function AboutUsPreview() {
         boxSizing: "border-box",
         background: "var(--bg)",
         color: "var(--text)",
-        padding: "12px 24px 20px",
+        padding: "4px 8px 12px",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 1300,
+          maxWidth: 1680,
           margin: "0 auto",
         }}
       >
         <header
           style={{
             textAlign: "center",
-            marginBottom: 18,
+            marginBottom: 14,
           }}
         >
           <p
@@ -99,10 +98,10 @@ export default function AboutUsPreview() {
 
           <h1
             style={{
-              fontSize: 30,
+              fontSize: 34,
               fontWeight: 700,
-              lineHeight: 1.2,
-              margin: "8px 0",
+              lineHeight: 1.15,
+              margin: "6px 0",
               color: "var(--text)",
             }}
           >
@@ -112,7 +111,7 @@ export default function AboutUsPreview() {
           <p
             style={{
               color: "var(--muted)",
-              fontSize: 14,
+              fontSize: 15,
               margin: 0,
             }}
           >
@@ -124,7 +123,7 @@ export default function AboutUsPreview() {
           style={{
             background: "var(--surface)",
             border: "1px solid var(--border)",
-            borderRadius: 20,
+            borderRadius: 24,
             overflow: "hidden",
           }}
         >
