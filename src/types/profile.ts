@@ -18,5 +18,5 @@ export const initialProfile: ProfileData = {
   weight: '55',
   calories: '2000',
   sugar: '50',
-  sodium: '2300',
+  sodium: '2000',
 }

@@ -1,5 +1,5 @@
-
 import { motion } from 'motion/react'
+import { NUTRITION_REFERENCE } from '../services/nutrition'
 
 type CalorieRingProps = {
   consumed?: number
@@ -21,11 +21,11 @@ type RingData = {
 
 export default function CalorieRing({
   consumed = 1250,
-  goal = 2000,
+  goal = NUTRITION_REFERENCE.calories,
   sugarConsumed = 28,
-  sugarGoal = 50,
+  sugarGoal = NUTRITION_REFERENCE.sugar,
   sodiumConsumed = 1400,
-  sodiumGoal = 2300,
+  sodiumGoal = NUTRITION_REFERENCE.sodium,
 }: CalorieRingProps) {
   const safePercent = (value: number, target: number) =>
     target > 0

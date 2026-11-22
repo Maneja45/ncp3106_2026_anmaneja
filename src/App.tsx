@@ -37,6 +37,7 @@ import {
 } from './types/meals'
 
 import { API_BASE_URL } from './services/api'
+import { NUTRITION_REFERENCE } from './services/nutrition'
 
 import './App.css'
 
@@ -157,6 +158,11 @@ function loadProfile(): ProfileData {
           if (typeof values[key] === 'string') {
             result[key] = values[key]
           }
+        }
+
+        // Old default (2,300 mg) → WHO limit (2,000 mg)
+        if (result.sodium === '2300') {
+          result.sodium = String(NUTRITION_REFERENCE.sodium)
         }
 
         return result
@@ -683,14 +689,15 @@ function App() {
   // NUTRITION SETTINGS
   // ==========================================
 
+  // Uses the user's own goal from Settings; falls back to the shared reference.
   const calorieGoal =
-    Number(profile.calories)
+    Number(profile.calories) || NUTRITION_REFERENCE.calories
 
   const sugarGoal =
-    Number(profile.sugar)
+    Number(profile.sugar) || NUTRITION_REFERENCE.sugar
 
   const sodiumGoal =
-    Number(profile.sodium)
+    Number(profile.sodium) || NUTRITION_REFERENCE.sodium
 
   // ==========================================
   // THEME
@@ -1360,6 +1367,22 @@ function App() {
           padding: 12px 22px;
 
           overflow: hidden;
+
+          /* Shared page background — green blobs */
+          background:
+            radial-gradient(circle at 15% 15%, rgba(190, 222, 160, 0.5) 0, transparent 40%),
+            radial-gradient(circle at 85% 30%, rgba(205, 232, 190, 0.45) 0, transparent 40%),
+            radial-gradient(circle at 60% 95%, rgba(185, 220, 165, 0.4) 0, transparent 45%),
+            #f8faf5 !important;
+          transition: background-color 0.35s ease;
+        }
+
+        [data-theme="dark"] .sustansya-workspace {
+          background:
+            radial-gradient(circle at 15% 15%, rgba(180, 225, 140, 0.14) 0, transparent 40%),
+            radial-gradient(circle at 85% 30%, rgba(200, 235, 170, 0.1) 0, transparent 40%),
+            radial-gradient(circle at 60% 95%, rgba(170, 215, 140, 0.12) 0, transparent 45%),
+            #0f1612 !important;
         }
 
         .sustansya-content {
@@ -1461,6 +1484,38 @@ function App() {
           line-height: 1.15;
 
           color: var(--text);
+        }
+
+        /* =====================================
+           SHARED PAGE HERO
+           eyebrow + serif title + subtitle
+           (used by every page for the same look)
+        ===================================== */
+
+        .sb-hero-eyebrow {
+          margin: 0 0 4px;
+          font-family: 'Manrope', sans-serif;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 1.3px;
+          text-transform: uppercase;
+          color: var(--primary);
+        }
+
+        .sb-hero-title {
+          margin: 0;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: clamp(22px, 2vw, 29px);
+          font-weight: 700;
+          letter-spacing: -0.6px;
+          line-height: 1.1;
+          color: var(--text);
+        }
+
+        .sb-hero-sub {
+          margin: 4px 0 0;
+          font-size: 12px;
+          color: var(--muted);
         }
 
         /* =====================================
