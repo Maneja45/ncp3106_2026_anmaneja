@@ -1,25 +1,25 @@
-import { useState } from 'react'
-import { motion } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 
 import {
-  Activity,
+  CheckCircle2,
+  Clock3,
   Cpu,
-  Flame,
   Layers3,
   Leaf,
-  Scale,
+  Lightbulb,
   TrendingUp,
+  AlertTriangle,
   Utensils,
   Wifi,
   WifiOff,
 } from 'lucide-react'
 
 import CalorieRing from './CalorieRing'
-import { MiniChart } from '../ui/mini-chart'
 import { type Meal, nutrition } from '../types/meals'
 
 // ==========================================
-// TYPESCRIPT TYPES
+// TYPES
 // ==========================================
 
 type DashboardProps = {
@@ -31,8 +31,11 @@ type DashboardProps = {
   liveWeight: number | null
 }
 
+type TrendKey = 'calories' | 'sugar' | 'sodium'
+type Status = 'ok' | 'near' | 'over'
+
 // ==========================================
-// HELPER FUNCTIONS
+// HELPERS
 // ==========================================
 
 const dateKey = (date: Date) =>
@@ -42,20 +45,78 @@ const dateKey = (date: Date) =>
     String(date.getDate()).padStart(2, '0'),
   ].join('-')
 
-const foodCategory = (compartment: number) =>
-  `Compartment ${compartment}`
-
 const percent = (value: number, goal: number) =>
   goal > 0 ? Math.round((value / goal) * 100) : 0
 
-const cardAnimation = {
-  initial: { opacity: 0, y: 10 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.4 },
+// For limits: under 80% = ok, 80–100% = near, above 100% = over
+function statusOf(value: number, goal: number): Status {
+  const ratio = goal > 0 ? value / goal : 0
+  if (ratio > 1) return 'over'
+  if (ratio >= 0.8) return 'near'
+  return 'ok'
 }
 
+function mealMinutes(time: string) {
+  const [clock, period] = time.split(' ')
+  const [hour, minute] = clock.split(':').map(Number)
+  return ((hour % 12) + (period === 'PM' ? 12 : 0)) * 60 + (minute || 0)
+}
+
+// Smoothly counts a number from its previous value to the new one.
+function useCountUp(value: number, duration = 700): number {
+  const [display, setDisplay] = useState(0)
+  const current = useRef(0)
+
+  useEffect(() => {
+    const from = current.current
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (reduce || from === value) {
+      current.current = value
+      setDisplay(value)
+      return
+    }
+
+    let frame = 0
+    const start = performance.now()
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const next = from + (value - from) * eased
+
+      current.current = next
+      setDisplay(next)
+
+      if (progress < 1) frame = requestAnimationFrame(tick)
+    }
+
+    frame = requestAnimationFrame(tick)
+
+    return () => cancelAnimationFrame(frame)
+  }, [value, duration])
+
+  return display
+}
+
+// Chart geometry (SVG viewBox 0 0 620 180)
+const CHART_W = 620
+const CHART_H = 180
+const X_START = 46
+const X_END = 600
+const Y_TOP = 18
+const Y_BOTTOM = 150
+
+const pointX = (index: number) => X_START + index * ((X_END - X_START) / 6)
+
+const card = (delay: number) => ({
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.45, delay },
+})
+
 // ==========================================
-// MAIN DASHBOARD COMPONENT
+// DASHBOARD
 // ==========================================
 
 export default function Dashboard({
@@ -66,96 +127,55 @@ export default function Dashboard({
   deviceOnline,
   liveWeight,
 }: DashboardProps) {
-
-  // ========================================
-  // ESP32 CONNECTION FROM APP.TSX
-  // ========================================
-
+  // ---------- ESP32 (from App.tsx) ----------
   const isOnline = deviceOnline
 
   const hasValidWeight =
-    typeof liveWeight === 'number' &&
-    Number.isFinite(liveWeight)
-
-  const statusLabel = isOnline
-    ? 'Online'
-    : 'Offline'
-
-  const statusColor = isOnline
-    ? '#45b879'
-    : '#eba25b'
+    typeof liveWeight === 'number' && Number.isFinite(liveWeight)
 
   const displayedWeight =
     isOnline && hasValidWeight && liveWeight !== null
       ? `${liveWeight.toFixed(1)} g`
       : '-- g'
 
-  // ========================================
-  // DATE AND WEEKLY MEAL DATA
-  // ========================================
-
+  // ---------- This week (Sun → Sat, same as Meal Planner) ----------
   const today = new Date()
   const todayKey = dateKey(today)
 
-  const monday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  )
+  const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  sunday.setDate(sunday.getDate() - sunday.getDay())
 
-  monday.setDate(
-    monday.getDate() -
-    ((monday.getDay() + 6) % 7)
-  )
+  const WEEK = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(sunday)
+    date.setDate(sunday.getDate() + index)
 
-  const WEEK = Array.from(
-    { length: 7 },
-    (_, index) => {
+    const key = dateKey(date)
+    const dayMeals = meals.filter(meal => meal.date === key)
 
-      const date = new Date(monday)
-
-      date.setDate(monday.getDate() + index)
-
-      const key = dateKey(date)
-
-      return {
-        day: [
-          'Mon',
-          'Tue',
-          'Wed',
-          'Thu',
-          'Fri',
-          'Sat',
-          'Sun',
-        ][index],
-
-        date: key,
-
-        calories: meals
-          .filter(meal => meal.date === key)
-          .reduce(
-            (sum, meal) =>
-              sum + nutrition(meal).calories,
-            0
-          ),
-      }
+    return {
+      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      full: date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+      }),
+      isToday: key === todayKey,
+      calories: dayMeals.reduce((sum, meal) => sum + nutrition(meal).calories, 0),
+      sugar: dayMeals.reduce((sum, meal) => sum + nutrition(meal).sugar, 0),
+      sodium: dayMeals.reduce((sum, meal) => sum + nutrition(meal).sodium, 0),
     }
-  )
+  })
 
-  const [selectedDay, setSelectedDay] =
-    useState<number>((today.getDay() + 6) % 7)
+  const [selectedDay, setSelectedDay] = useState<number>(today.getDay())
+  const [trend, setTrend] = useState<TrendKey>('calories')
 
-  const todayMeals = meals.filter(
-    meal => meal.date === todayKey
-  )
-
-  // ========================================
-  // RECORDED MEAL TOTALS
-  // ========================================
+  // ---------- Today ----------
+  const todayMeals = meals
+    .filter(meal => meal.date === todayKey)
+    .sort((a, b) => mealMinutes(a.time) - mealMinutes(b.time))
 
   const totals = todayMeals.reduce(
     (sum, meal) => {
-
       const value = nutrition(meal)
 
       return {
@@ -165,1746 +185,1420 @@ export default function Dashboard({
         weight: sum.weight + meal.weight,
       }
     },
-    {
-      calories: 0,
-      sugar: 0,
-      sodium: 0,
-      weight: 0,
-    }
+    { calories: 0, sugar: 0, sodium: 0, weight: 0 }
   )
 
-  // Recorded meal weight stays separate
-  // from actual ESP32 sensor weight.
+  const animatedCalories = useCountUp(totals.calories)
+  const animatedSugar = useCountUp(totals.sugar)
+  const animatedSodium = useCountUp(totals.sodium)
 
-  const totalWeight = totals.weight
-
-  const totalCalories =
-    Math.round(totals.calories)
-
-  // ========================================
-  // SMART LUNCHBOX COMPARTMENTS
-  // ========================================
-
-  const FOODS = [1, 2, 3].map(compartment => {
-
-    const items = todayMeals.filter(
-      meal => meal.compartment === compartment
-    )
-
-    const weight = items.reduce(
-      (sum, meal) => sum + meal.weight,
-      0
-    )
-
-    const calories = Math.round(
-      items.reduce(
-        (sum, meal) =>
-          sum + nutrition(meal).calories,
-        0
-      )
-    )
-
-    return {
-      compartment,
-
-      name:
-        items.length === 0
-          ? 'Empty'
-          : items
-              .map(meal => meal.food)
-              .join(', '),
-
-      category: foodCategory(compartment),
-
-      weight,
-      calories,
-
-      emoji: items[0]?.emoji ?? '🍽️',
-    }
-  })
-
-  // ========================================
-  // NUTRITION TREND CHART
-  // ========================================
-
-  const maxCalories = Math.max(
-    calorieGoal,
-    ...WEEK.map(day => day.calories),
-    1
-  )
-
-  const chartMax = Math.max(
-    500,
-    Math.ceil(maxCalories / 500) * 500
-  )
-
-  const pointX = (index: number) =>
-    45 + index * (560 / 6)
-
-  const pointY = (calories: number) =>
-    150 - (calories / chartMax) * 125
-
-  const trendPoints = WEEK.map(
-    (day, index) =>
-      `${pointX(index)},${pointY(day.calories)}`
-  )
-
-  const trendLine =
-    `M ${trendPoints.join(' L ')}`
-
-  const trendArea =
-    `${trendLine} L ${pointX(6)},150 ` +
-    `L ${pointX(0)},150 Z`
-
-  const highlighted =
-    WEEK[selectedDay] ?? WEEK[0]
-
-  // ========================================
-  // NUTRITION VALUES
-  // ========================================
-
-  const caloriePercent = percent(
-    totals.calories,
-    calorieGoal
-  )
+  const sugarStatus = statusOf(totals.sugar, sugarGoal)
+  const sodiumStatus = statusOf(totals.sodium, sodiumGoal)
 
   const nutrients = [
     {
       label: 'Calories',
-      value: Math.round(
-        totals.calories
-      ).toLocaleString(),
-
+      value: Math.round(animatedCalories).toLocaleString(),
       goal: calorieGoal.toLocaleString(),
       unit: 'kcal',
-      percentage: caloriePercent,
-      color: '#376B50',
+      percentage: percent(totals.calories, calorieGoal),
+      color: 'var(--db-calories)',
+      status: null as Status | null,
     },
     {
       label: 'Sugar',
-      value: Number(
-        totals.sugar.toFixed(1)
-      ).toLocaleString(),
-
+      value: Number(animatedSugar.toFixed(1)).toLocaleString(),
       goal: sugarGoal.toLocaleString(),
       unit: 'g',
-
-      percentage: percent(
-        totals.sugar,
-        sugarGoal
-      ),
-
-      color: '#E99B4B',
+      percentage: percent(totals.sugar, sugarGoal),
+      color: 'var(--db-sugar)',
+      status: sugarStatus,
     },
     {
       label: 'Sodium',
-      value: Math.round(
-        totals.sodium
-      ).toLocaleString(),
-
+      value: Math.round(animatedSodium).toLocaleString(),
       goal: sodiumGoal.toLocaleString(),
       unit: 'mg',
-
-      percentage: percent(
-        totals.sodium,
-        sodiumGoal
-      ),
-
-      color: '#4CB5A5',
+      percentage: percent(totals.sodium, sodiumGoal),
+      color: 'var(--db-sodium)',
+      status: sodiumStatus,
     },
   ]
 
-  // ========================================
-  // DASHBOARD UI
-  // ========================================
+  // ---------- Smart Lunchbox compartments ----------
+  const FOODS = [1, 2, 3].map(compartment => {
+    const items = todayMeals.filter(meal => meal.compartment === compartment)
+    const weight = items.reduce((sum, meal) => sum + meal.weight, 0)
+
+    return {
+      compartment,
+      name: items.length === 0 ? 'Empty' : items.map(meal => meal.food).join(', '),
+      weight,
+      calories: Math.round(
+        items.reduce((sum, meal) => sum + nutrition(meal).calories, 0)
+      ),
+      emoji: items[0]?.emoji ?? null,
+      share: totals.weight > 0 ? (weight / totals.weight) * 100 : 0,
+    }
+  })
+
+  // ---------- Daily insights ----------
+  const insights: { status: Status; text: string }[] = []
+
+  const caloriesLeft = Math.round(calorieGoal - totals.calories)
+  insights.push({
+    status: caloriesLeft < 0 ? 'near' : 'ok',
+    text:
+      caloriesLeft >= 0
+        ? `${caloriesLeft.toLocaleString()} kcal left of your ${calorieGoal.toLocaleString()} kcal reference today.`
+        : `${Math.abs(caloriesLeft).toLocaleString()} kcal above your ${calorieGoal.toLocaleString()} kcal reference today.`,
+  })
+
+  const sodiumLeft = Math.round(sodiumGoal - totals.sodium)
+  insights.push({
+    status: sodiumStatus,
+    text:
+      sodiumStatus === 'over'
+        ? `Sodium is ${Math.abs(sodiumLeft).toLocaleString()} mg above the WHO limit. Choose less salty food for the rest of the day.`
+        : sodiumStatus === 'near'
+          ? `Sodium is close to the WHO limit (${percent(totals.sodium, sodiumGoal)}%). Go easy on salty food.`
+          : `Sodium is at ${percent(totals.sodium, sodiumGoal)}% of the WHO limit — about ${sodiumLeft.toLocaleString()} mg left today.`,
+  })
+
+  insights.push({
+    status: sugarStatus,
+    text:
+      sugarStatus === 'over'
+        ? `Sugar is above the ${sugarGoal} g reference today.`
+        : sugarStatus === 'near'
+          ? `Sugar is close to the ${sugarGoal} g reference (${percent(totals.sugar, sugarGoal)}%).`
+          : `Sugar is well within the ${sugarGoal} g reference (${percent(totals.sugar, sugarGoal)}%).`,
+  })
+
+  // ---------- Trend chart ----------
+  const trendConfig: Record<TrendKey, { label: string; unit: string; goal: number; color: string; isLimit: boolean }> = {
+    calories: { label: 'Calories', unit: 'kcal', goal: calorieGoal, color: 'var(--db-calories)', isLimit: false },
+    sugar: { label: 'Sugar', unit: 'g', goal: sugarGoal, color: 'var(--db-sugar)', isLimit: true },
+    sodium: { label: 'Sodium', unit: 'mg', goal: sodiumGoal, color: 'var(--db-sodium)', isLimit: true },
+  }
+
+  const currentTrend = trendConfig[trend]
+  const values = WEEK.map(day => day[trend])
+
+  const step = trend === 'sugar' ? 10 : 500
+  const chartMax = Math.max(
+    step,
+    Math.ceil((Math.max(currentTrend.goal, ...values) * 1.1) / step) * step
+  )
+
+  const pointY = (value: number) =>
+    Y_BOTTOM - (value / chartMax) * (Y_BOTTOM - Y_TOP)
+
+  const linePoints = values.map((value, index) => `${pointX(index)},${pointY(value)}`)
+  const trendLine = `M ${linePoints.join(' L ')}`
+  const trendArea = `${trendLine} L ${pointX(6)},${Y_BOTTOM} L ${pointX(0)},${Y_BOTTOM} Z`
+  const referenceY = pointY(currentTrend.goal)
+
+  const selected = WEEK[selectedDay] ?? WEEK[0]
+  const selectedValue = selected[trend]
+  const selectedStatus = currentTrend.isLimit
+    ? statusOf(selectedValue, currentTrend.goal)
+    : null
+
+  const formatTrend = (value: number) =>
+    trend === 'sugar'
+      ? Number(value.toFixed(1)).toLocaleString()
+      : Math.round(value).toLocaleString()
 
   return (
-    <div className="sb-reference-dashboard">
-
-      <style>{`
-
-        /* MAIN DASHBOARD */
-
-        .sb-reference-dashboard {
-          width: 100%;
-          height: 100%;
-          min-height: 0;
-          min-width: 0;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          color: var(--text, #203a2e);
-          font-family: inherit;
-        }
-
-        .sb-reference-dashboard * {
-          box-sizing: border-box;
-        }
-
-        /* SIX-CARD BENTO GRID */
-
-        .sb-reference-dashboard .ref-grid {
-          display: grid;
-          flex: 1;
-          min-height: 0;
-          min-width: 0;
-          grid-template-columns: repeat(12, minmax(0, 1fr));
-          grid-template-rows: minmax(0, 1.35fr) minmax(0, 0.9fr);
-          grid-template-areas:
-            "nutrition nutrition nutrition nutrition nutrition lunchbox lunchbox lunchbox right right right right"
-            "trends trends trends trends trends trends trends summary summary summary summary summary";
-          gap: 12px;
-          padding: 2px;
-        }
-
-        .sb-reference-dashboard .ref-card {
-          min-width: 0;
-          min-height: 0;
-          overflow: hidden;
-          background: var(--surface, #fff);
-          border: 1px solid var(--border, #e9eee8);
-          border-radius: 22px;
-          padding: 17px;
-          display: flex;
-          flex-direction: column;
-          box-shadow: 0 5px 17px rgba(30,60,40,0.05);
-        }
-
-        .sb-reference-dashboard .ref-nutrition {
-          grid-area: nutrition;
-        }
-
-        .sb-reference-dashboard .ref-lunchbox {
-          grid-area: lunchbox;
-        }
-
-        .sb-reference-dashboard .ref-right {
-          grid-area: right;
-          display: grid;
-          grid-template-rows: minmax(0, 1.12fr) minmax(0, 0.88fr);
-          gap: 12px;
-          min-height: 0;
-        }
-
-        .sb-reference-dashboard .ref-trends {
-          grid-area: trends;
-        }
-
-        .sb-reference-dashboard .ref-summary {
-          grid-area: summary;
-        }
-
-        /* CARD HEADINGS */
-
-        .sb-reference-dashboard .ref-heading {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 13px;
-          flex-shrink: 0;
-        }
-
-        .sb-reference-dashboard .ref-heading-left {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 0;
-        }
-
-        .sb-reference-dashboard .ref-heading-icon {
-          width: 35px;
-          height: 35px;
-          flex-shrink: 0;
-          display: grid;
-          place-items: center;
-          border-radius: 11px;
-          background: #e9f1e8;
-          color: #376b50;
-        }
-
-        .sb-reference-dashboard .ref-heading h3 {
-          margin: 0;
-          font-family: Georgia, serif;
-          font-size: clamp(13px, 1.15vw, 18px);
-          font-weight: 700;
-          letter-spacing: -0.3px;
-          color: var(--text, #203a2e);
-        }
-
-        .sb-reference-dashboard .ref-heading p {
-          margin: 3px 0 0;
-          font-size: 10px;
-          color: var(--muted, #819087);
-        }
-
-        .sb-reference-dashboard .ref-more {
-          color: var(--muted, #819087);
-          background: #f6f8f5;
-          padding: 5px 8px;
-          border-radius: 9px;
-          font-size: 13px;
-          flex-shrink: 0;
-        }
-
-        /* TODAY'S NUTRITION */
-
-        .sb-reference-dashboard .ref-nutrition-body {
-          display: grid;
-          grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-          gap: 12px;
-          flex: 1;
-          min-height: 0;
-          align-items: stretch;
-        }
-
-        .sb-reference-dashboard .ref-rings {
-          min-width: 0;
-          min-height: 0;
-          overflow: hidden;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .sb-reference-dashboard .ref-rings > * {
-          width: 100%;
-          height: 100%;
-          min-height: 0;
-          min-width: 0;
-        }
-
-        .sb-reference-dashboard .ref-rings .sb-triple-ring {
-          padding: 0;
-          border: none;
-          border-radius: 0;
-          background: transparent;
-        }
-
-        .sb-reference-dashboard .ref-rings .sb-triple-ring-header,
-        .sb-reference-dashboard .ref-rings .sb-triple-ring-legend {
-          display: none;
-        }
-
-        .sb-reference-dashboard .ref-rings .sb-triple-ring-graphic {
-          width: 100%;
-          height: 100%;
-          flex: 1;
-          min-height: 0;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-list {
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          min-height: 0;
-          min-width: 0;
-        }
-
-        .sb-reference-dashboard .ref-nutrient {
-          padding: 13px 0;
-          border-bottom: 1px solid var(--border, #edf0eb);
-        }
-
-        .sb-reference-dashboard .ref-nutrient:last-child {
-          border-bottom: none;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-top {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          margin-bottom: 5px;
-        }
-
-        .sb-reference-dashboard .ref-dot {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-label {
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-bottom {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 5px;
-          padding-left: 17px;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-value {
-          min-width: 0;
-          white-space: nowrap;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-value strong {
-          font-size: clamp(12px, 1.1vw, 17px);
-          font-weight: 800;
-        }
-
-        .sb-reference-dashboard .ref-nutrient-value span {
-          font-size: 10px;
-          color: var(--muted, #819087);
-        }
-
-        .sb-reference-dashboard .ref-percent {
-          background: #e9f1e8;
-          color: #376b50;
-          padding: 5px 8px;
-          border-radius: 999px;
-          font-size: 10px;
-          font-weight: 800;
-          white-space: nowrap;
-        }
-
-        /* SMART LUNCHBOX */
-
-        .sb-reference-dashboard .ref-food-list {
-          display: grid;
-          grid-template-rows: repeat(3, minmax(0, 1fr));
-          flex: 1;
-          min-height: 0;
-          gap: 9px;
-        }
-
-        .sb-reference-dashboard .ref-food {
-          min-width: 0;
-          min-height: 0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          background: #f6f6f3;
-          border-radius: 14px;
-          padding: 9px 12px;
-          overflow: hidden;
-        }
-
-        .sb-reference-dashboard .ref-food-emoji {
-          width: 48px;
-          flex-shrink: 0;
-          font-size: clamp(24px, 2.5vw, 35px);
-          text-align: center;
-          line-height: 1;
-        }
-
-        .sb-reference-dashboard .ref-food-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .sb-reference-dashboard .ref-food-info strong {
-          display: block;
-          font-size: 12px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .sb-reference-dashboard .ref-food-info span {
-          display: block;
-          margin-top: 4px;
-          color: var(--muted, #819087);
-          font-size: 10px;
-        }
-
-        .sb-reference-dashboard .ref-food-stats {
-          text-align: right;
-          flex-shrink: 0;
-        }
-
-        .sb-reference-dashboard .ref-food-stats strong {
-          display: block;
-          font-size: 12px;
-        }
-
-        .sb-reference-dashboard .ref-food-stats span {
-          display: block;
-          margin-top: 4px;
-          color: var(--muted, #819087);
-          font-size: 9px;
-        }
-
-        /* WEEKLY CALORIES */
-
-        .sb-reference-dashboard .ref-weekly {
-          padding: 13px;
-        }
-
-        .sb-reference-dashboard .ref-weekly .ref-heading {
-          margin-bottom: 6px;
-        }
-
-        .sb-reference-dashboard .ref-weekly-chart {
-          flex: 1;
-          min-height: 0;
-          display: grid;
-          grid-template-columns: repeat(7, minmax(0, 1fr));
-          align-items: stretch;
-          gap: 6px;
-        }
-
-        .sb-reference-dashboard .ref-weekly-day {
-          border: 0;
-          background: transparent;
-          padding: 0;
-          min-width: 0;
-          min-height: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 5px;
-          cursor: pointer;
-          color: var(--muted, #819087);
-          font-size: 9px;
-        }
-
-        .sb-reference-dashboard .ref-weekly-track {
-          width: min(100%, 35px);
-          flex: 1;
-          min-height: 0;
-          background: #f0f3ef;
-          border-radius: 8px 8px 3px 3px;
-          display: flex;
-          align-items: flex-end;
-          overflow: hidden;
-        }
-
-        .sb-reference-dashboard .ref-weekly-fill {
-          width: 100%;
-          background: #b6cbb9;
-          border-radius: 8px 8px 3px 3px;
-          transition: height 0.3s, background 0.2s;
-        }
-
-        .sb-reference-dashboard
-        .ref-weekly-day[aria-pressed='true']
-        .ref-weekly-fill {
-          background: #376b50;
-        }
-
-        .sb-reference-dashboard
-        .ref-weekly-day[aria-pressed='true'] {
-          font-weight: 800;
-          color: #376b50;
-        }
-
-        /* LIVE ESP32 DEVICE OVERVIEW */
-
-        .sb-reference-dashboard .ref-device {
-          background: linear-gradient(
-            125deg,
-            #244b34 0%,
-            #376b50 60%,
-            #234c35 100%
-          );
-          color: white;
-          border: none;
-          position: relative;
-          padding: 14px;
-        }
-
-        .sb-reference-dashboard .ref-device::after {
-          content: '';
-          position: absolute;
-          width: 150px;
-          height: 150px;
-          border: 1px solid rgba(255,255,255,0.13);
-          border-radius: 50%;
-          right: -65px;
-          bottom: -100px;
-          box-shadow:
-            0 0 0 15px rgba(255,255,255,0.035),
-            0 0 0 32px rgba(255,255,255,0.025);
-          pointer-events: none;
-        }
-
-        .sb-reference-dashboard .ref-device .ref-heading {
-          margin-bottom: 8px;
-          position: relative;
-          z-index: 1;
-        }
-
-        .sb-reference-dashboard .ref-device .ref-heading h3 {
-          color: white;
-        }
-
-        .sb-reference-dashboard .ref-device .ref-heading-icon {
-          background: rgba(255,255,255,0.14);
-          color: white;
-        }
-
-        /* DEVICE CONNECTION INDICATOR */
-
-        .sb-reference-dashboard .ref-device-status {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 5px 9px;
-          background: white;
-          color: #31513c;
-          border-radius: 999px;
-          font-size: 10px;
-          font-weight: 800;
-          white-space: nowrap;
-          transition: color 0.3s;
-        }
-
-        .sb-reference-dashboard .ref-status-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          flex-shrink: 0;
-          transition: background 0.3s;
-        }
-
-        .sb-reference-dashboard .ref-status-dot.is-online {
-          animation: ref-online-pulse 2s infinite;
-        }
-
-        @keyframes ref-online-pulse {
-          0%, 100% {
-            box-shadow: 0 0 0 0 rgba(69,184,121,0);
+    <MotionConfig reducedMotion="user">
+      <div className="db-page">
+        <style>{`
+          /* ================= THEME ================= */
+          .db-page {
+            --db-text: var(--text, #203a2e);
+            --db-muted: var(--muted, #6f8176);
+            --db-border: var(--border, #e2eadc);
+            --db-surface: var(--surface, #ffffff);
+            --db-primary: var(--primary, #376b50);
+
+            --db-ink: #1f3d2c;
+            --db-glass: rgba(255, 255, 255, 0.86);
+            --db-soft: #e9f1e8;
+            --db-tile: #f6f7f3;
+            --db-track: #e3eadf;
+            --db-ok: #5f9a6c;
+            --db-near: #c98a2b;
+            --db-over: #c4544c;
+            --db-calories: #376b50;
+            --db-sugar: #d98a3d;
+            --db-sodium: #3f9e8f;
+            --db-c1: #d4b878;
+            --db-c2: #c0843e;
+            --db-c3: #5f9c45;
+            --db-bubble: #376b50;
+            --db-bubble-text: #ffffff;
           }
 
-          50% {
-            box-shadow: 0 0 0 4px rgba(69,184,121,0.22);
-          }
-        }
-
-        /* DEVICE CONTENT */
-
-        .sb-reference-dashboard .ref-device-content {
-          display: flex;
-          align-items: center;
-          flex: 1;
-          min-height: 0;
-          position: relative;
-          z-index: 1;
-          gap: 14px;
-        }
-
-        .sb-reference-dashboard .ref-device-visual {
-          width: 40%;
-          min-width: 0;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .sb-reference-dashboard .ref-device-box {
-          width: clamp(55px, 7vw, 95px);
-          height: clamp(45px, 5vw, 68px);
-          background: #dce7d8;
-          border: 5px solid #9cb8a4;
-          border-radius: 18px;
-          transform: rotate(-12deg);
-          box-shadow:
-            0 10px 18px rgba(0,0,0,0.18),
-            inset 0 -10px 0 rgba(60,100,70,0.12);
-          display: grid;
-          place-items: center;
-          color: #376b50;
-        }
-
-        .sb-reference-dashboard .ref-device-info {
-          border-left: 1px solid rgba(255,255,255,0.25);
-          padding-left: 15px;
-          min-width: 0;
-          flex: 1;
-        }
-
-        .sb-reference-dashboard .ref-device-info p {
-          margin: 0 0 3px;
-          font-size: 10px;
-          color: rgba(255,255,255,0.8);
-        }
-
-        .sb-reference-dashboard .ref-device-info strong {
-          display: block;
-          font-size: clamp(18px, 2vw, 29px);
-          letter-spacing: -0.5px;
-          font-variant-numeric: tabular-nums;
-          white-space: nowrap;
-        }
-
-        .sb-reference-dashboard .ref-device-info span {
-          display: block;
-          margin-top: 4px;
-          font-size: 9px;
-          line-height: 1.4;
-          color: rgba(255,255,255,0.7);
-        }
-
-        .sb-reference-dashboard .ref-live-source {
-          display: flex !important;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .sb-reference-dashboard
-        .ref-device-info .ref-live-update {
-          font-size: 8px;
-          color: rgba(255,255,255,0.55);
-        }
-
-        /* NUTRITION TRENDS */
-
-        .sb-reference-dashboard .ref-trends-chart {
-          flex: 1;
-          min-height: 0;
-          min-width: 0;
-          position: relative;
-        }
-
-        .sb-reference-dashboard .ref-trends-svg {
-          width: 100%;
-          height: 100%;
-          display: block;
-          overflow: visible;
-        }
-
-        .sb-reference-dashboard .ref-trends-value {
-          position: absolute;
-          top: 1px;
-          left: 52%;
-          transform: translateX(-50%);
-          background: #376b50;
-          color: white;
-          padding: 5px 8px;
-          border-radius: 7px;
-          font-size: 10px;
-          font-weight: 700;
-          white-space: nowrap;
-        }
-
-        /* MEAL SUMMARY */
-
-        .sb-reference-dashboard .ref-summary-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
-          flex: 1;
-          min-height: 0;
-        }
-
-        .sb-reference-dashboard .ref-summary-tile {
-          min-width: 0;
-          min-height: 0;
-          border-radius: 15px;
-          background: #f6f6f3;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          gap: 8px;
-          padding: 8px 5px;
-        }
-
-        .sb-reference-dashboard .ref-summary-tile svg {
-          color: #376b50;
-        }
-
-        .sb-reference-dashboard .ref-summary-tile strong {
-          font-size: clamp(15px, 1.7vw, 24px);
-          font-weight: 800;
-          white-space: nowrap;
-        }
-
-        .sb-reference-dashboard .ref-summary-tile small {
-          color: var(--muted, #819087);
-          font-size: 9px;
-          line-height: 1.3;
-        }
-
-        /* SHORTER DESKTOP WINDOWS */
-
-        @media (max-height: 800px) {
-
-          .sb-reference-dashboard .ref-grid {
-            gap: 9px;
+          [data-theme="dark"] .db-page {
+            --db-ink: #eef6e6;
+            --db-glass: rgba(22, 36, 29, 0.82);
+            --db-soft: #27412f;
+            --db-tile: #22372b;
+            --db-track: #2f4637;
+            --db-ok: #8cc77a;
+            --db-near: #e2b15f;
+            --db-over: #ee8b80;
+            --db-calories: #a1d7ae;
+            --db-sugar: #efb57a;
+            --db-sodium: #7fd0c2;
+            --db-c1: #e8d7a4;
+            --db-c2: #e0a35c;
+            --db-c3: #8cc76f;
+            --db-bubble: #b6dec0;
+            --db-bubble-text: #173c2a;
           }
 
-          .sb-reference-dashboard .ref-card {
-            padding: 11px;
-            border-radius: 17px;
+          /* ================= SHELL ================= */
+          .db-page {
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            color: var(--db-text);
+            font-family: inherit;
           }
 
-          .sb-reference-dashboard .ref-heading {
-            margin-bottom: 8px;
+          .db-page *,
+          .db-page *::before,
+          .db-page *::after {
+            box-sizing: border-box;
           }
 
-          .sb-reference-dashboard .ref-heading-icon {
-            width: 29px;
-            height: 29px;
+          .db-page button {
+            font-family: inherit;
+            cursor: pointer;
           }
 
-          .sb-reference-dashboard .ref-nutrient {
-            padding: 8px 0;
+          .db-page button:focus-visible {
+            outline: 2px solid var(--db-primary);
+            outline-offset: 2px;
           }
 
-          .sb-reference-dashboard .ref-food {
-            padding: 6px 8px;
+          .db-num {
+            font-family: 'Manrope', sans-serif;
+            font-variant-numeric: tabular-nums;
           }
 
-          .sb-reference-dashboard .ref-food-list {
+          .db-grid {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
+            grid-template-areas:
+              "nutrition nutrition nutrition nutrition nutrition lunchbox lunchbox lunchbox right right right right"
+              "trends trends trends trends trends trends trends meals meals meals meals meals";
+            gap: 12px;
+            padding: 2px;
+          }
+
+          .db-card {
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            border-radius: 20px;
+            border: 1px solid var(--db-border);
+            background: var(--db-glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 5px 17px rgba(30, 60, 40, 0.05);
+            transition: background-color 0.35s ease, border-color 0.35s ease;
+          }
+
+          .db-nutrition { grid-area: nutrition; }
+          .db-lunchbox { grid-area: lunchbox; }
+          .db-trends { grid-area: trends; }
+          .db-meals { grid-area: meals; }
+
+          .db-right {
+            grid-area: right;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 12px;
+          }
+
+          /* headings */
+          .db-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+          }
+
+          .db-heading-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+          }
+
+          .db-heading-icon {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+            border-radius: 11px;
+            background: var(--db-soft);
+            color: var(--db-primary);
+          }
+
+          [data-theme="dark"] .db-heading-icon {
+            color: var(--db-calories);
+          }
+
+          .db-heading h3 {
+            margin: 0;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: clamp(14px, 1.2vw, 18px);
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            color: var(--db-ink);
+          }
+
+          .db-heading p {
+            margin: 2px 0 0;
+            font-size: 11px;
+            color: var(--db-muted);
+          }
+
+          .db-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 99px;
+            font-size: 10px;
+            font-weight: 800;
+            white-space: nowrap;
+          }
+
+          .db-chip.ok { color: var(--db-ok); background: color-mix(in srgb, var(--db-ok) 14%, transparent); }
+          .db-chip.near { color: var(--db-near); background: color-mix(in srgb, var(--db-near) 16%, transparent); }
+          .db-chip.over { color: var(--db-over); background: color-mix(in srgb, var(--db-over) 16%, transparent); }
+          .db-chip.info { color: var(--db-muted); background: var(--db-soft); }
+
+          /* ================= TODAY'S NUTRITION ================= */
+          .db-nutrition-body {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: 12px;
+          }
+
+          .db-rings {
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .db-rings > * {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+          }
+
+          .db-rings .sb-triple-ring {
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+          }
+
+          .db-rings .sb-triple-ring-header,
+          .db-rings .sb-triple-ring-legend {
+            display: none;
+          }
+
+          .db-rings .sb-triple-ring-graphic {
+            width: 100%;
+            height: 100%;
+            flex: 1;
+            min-height: 0;
+          }
+
+          .db-nutrient-list {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+            min-height: 0;
+          }
+
+          .db-nutrient {
+            padding: 11px 0;
+            border-bottom: 1px solid var(--db-border);
+          }
+
+          .db-nutrient:last-child {
+            border-bottom: 0;
+          }
+
+          .db-nutrient-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 6px;
+            margin-bottom: 4px;
           }
 
-          .sb-reference-dashboard .ref-summary-tile {
-            gap: 5px;
+          .db-nutrient-label {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 12px;
+            font-weight: 700;
           }
-        }
 
-        /* NARROW DESKTOP WINDOWS */
+          .db-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+          }
 
-        @media (max-width: 1100px) {
+          .db-nutrient-bottom {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 6px;
+            padding-left: 17px;
+          }
 
-          .sb-reference-dashboard .ref-grid {
+          .db-nutrient-bottom strong {
+            font-size: clamp(14px, 1.3vw, 19px);
+            font-weight: 800;
+            color: var(--db-ink);
+          }
+
+          .db-nutrient-bottom span {
+            font-size: 10px;
+            color: var(--db-muted);
+          }
+
+          .db-nutrient-bottom b {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--db-muted);
+          }
+
+          /* ================= SMART LUNCHBOX ================= */
+          .db-food-list {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: repeat(3, minmax(0, 1fr));
             gap: 8px;
           }
 
-          .sb-reference-dashboard .ref-card {
-            padding: 10px;
+          .db-food {
+            position: relative;
+            min-width: 0;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px 12px;
+            border-radius: 14px;
+            background: var(--db-tile);
+            border: 1px solid var(--db-border);
+            overflow: hidden;
           }
 
-          .sb-reference-dashboard .ref-heading h3 {
+          .db-food-emoji {
+            width: 42px;
+            height: 42px;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            font-size: 24px;
+            background: color-mix(in srgb, var(--db-c) 18%, transparent);
+          }
+
+          .db-food-empty {
+            width: 42px;
+            height: 42px;
+            flex-shrink: 0;
+            border-radius: 12px;
+            border: 1.5px dashed color-mix(in srgb, var(--db-c) 60%, transparent);
+          }
+
+          .db-food-info {
+            flex: 1;
+            min-width: 0;
+          }
+
+          .db-food-info strong {
+            display: block;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .db-food-info span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 3px;
+            font-size: 10px;
+            color: var(--db-muted);
+          }
+
+          .db-food-info span i {
+            width: 7px;
+            height: 7px;
+            border-radius: 2px;
+            background: var(--db-c);
+          }
+
+          .db-food-stats {
+            text-align: right;
+            flex-shrink: 0;
+          }
+
+          .db-food-stats strong {
+            display: block;
             font-size: 12px;
           }
 
-          .sb-reference-dashboard .ref-heading p {
-            font-size: 9px;
+          .db-food-stats span {
+            display: block;
+            margin-top: 3px;
+            font-size: 10px;
+            color: var(--db-muted);
           }
 
-          .sb-reference-dashboard .ref-food-emoji {
-            width: 30px;
+          .db-food-fill {
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            bottom: 6px;
+            height: 3px;
+            border-radius: 3px;
+            background: var(--db-track);
+            overflow: hidden;
           }
 
-          .sb-reference-dashboard .ref-food {
-            gap: 5px;
+          .db-food-fill > span {
+            display: block;
+            height: 100%;
+            background: var(--db-c);
           }
 
-          .sb-reference-dashboard .ref-nutrient {
-            padding: 7px 0;
-          }
-        }
-
-        /* COMPACT MOBILE VIEW */
-
-        @media (max-width: 760px) {
-
-          .sb-reference-dashboard .ref-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            grid-template-rows: repeat(3, minmax(0, 1fr));
-            grid-template-areas:
-              "nutrition lunchbox"
-              "right right"
-              "trends summary";
-            gap: 5px;
+          /* ================= DEVICE ================= */
+          .db-device {
+            position: relative;
+            padding: 14px;
+            border: 0;
+            color: #ffffff;
+            background: linear-gradient(125deg, #244b34 0%, #376b50 60%, #234c35 100%);
           }
 
-          .sb-reference-dashboard .ref-right {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            grid-template-rows: minmax(0, 1fr);
-            gap: 5px;
+          [data-theme="dark"] .db-device {
+            background: linear-gradient(125deg, #1b3a28 0%, #24452f 60%, #1b3a28 100%);
           }
 
-          .sb-reference-dashboard .ref-card {
-            padding: 7px;
-            border-radius: 11px;
+          .db-device::after {
+            content: '';
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            right: -65px;
+            bottom: -100px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            box-shadow:
+              0 0 0 15px rgba(255, 255, 255, 0.035),
+              0 0 0 32px rgba(255, 255, 255, 0.025);
+            pointer-events: none;
           }
 
-          .sb-reference-dashboard .ref-heading {
-            margin-bottom: 5px;
+          .db-device .db-heading {
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
           }
 
-          .sb-reference-dashboard .ref-heading p,
-          .sb-reference-dashboard .ref-more {
-            display: none;
+          .db-device .db-heading h3 {
+            color: #ffffff;
           }
 
-          .sb-reference-dashboard .ref-heading-icon {
-            width: 23px;
-            height: 23px;
+          .db-device .db-heading-icon {
+            background: rgba(255, 255, 255, 0.14);
+            color: #ffffff;
           }
 
-          .sb-reference-dashboard .ref-nutrition-body {
-            gap: 4px;
-          }
-
-          .sb-reference-dashboard .ref-nutrient {
-            padding: 3px 0;
-          }
-
-          .sb-reference-dashboard .ref-nutrient-label,
-          .sb-reference-dashboard .ref-food-info strong {
-            font-size: 9px;
-          }
-
-          .sb-reference-dashboard .ref-nutrient-value span,
-          .sb-reference-dashboard .ref-food-info span {
-            display: none;
-          }
-
-          .sb-reference-dashboard .ref-food {
-            padding: 3px;
-          }
-
-          .sb-reference-dashboard .ref-food-emoji {
-            width: 20px;
-            font-size: 18px;
-          }
-
-          .sb-reference-dashboard .ref-food-stats span {
-            display: none;
-          }
-
-          .sb-reference-dashboard .ref-summary-grid {
-            gap: 4px;
-          }
-
-          .sb-reference-dashboard .ref-summary-tile {
-            padding: 4px;
-          }
-
-          .sb-reference-dashboard .ref-summary-tile small {
-            font-size: 8px;
-          }
-
-          .sb-reference-dashboard .ref-device-content {
+          .db-device-status {
+            display: inline-flex;
+            align-items: center;
             gap: 6px;
+            padding: 5px 10px;
+            border-radius: 99px;
+            background: #ffffff;
+            color: #31513c;
+            font-size: 10px;
+            font-weight: 800;
           }
 
-          .sb-reference-dashboard .ref-device-info {
-            padding-left: 7px;
+          .db-status-dot {
+            position: relative;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #eba25b;
           }
 
-          .sb-reference-dashboard .ref-device-status {
-            font-size: 8px;
-            padding: 4px 6px;
+          .db-status-dot.online {
+            background: #45b879;
           }
 
-          .sb-reference-dashboard .ref-device-info strong {
-            font-size: 17px;
+          .db-status-dot::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: inherit;
+            animation: dbPulse 2.4s ease-out infinite;
           }
-        }
 
-        /* THEME-SAFE DASHBOARD COLORS */
+          .db-status-dot.online::after {
+            animation-duration: 1.4s;
+          }
 
-        .sb-reference-dashboard .ref-food,
-        .sb-reference-dashboard .ref-summary-tile {
-          background: #f6f6f3;
-          color: #203a2e;
-        }
+          @keyframes dbPulse {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(2.8); opacity: 0; }
+          }
 
-        .sb-reference-dashboard .ref-food-info strong,
-        .sb-reference-dashboard .ref-food-stats strong,
-        .sb-reference-dashboard .ref-summary-tile strong {
-          color: #203a2e;
-        }
+          .db-device-content {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            position: relative;
+            z-index: 1;
+          }
 
-        .sb-reference-dashboard .ref-food-info span,
-        .sb-reference-dashboard .ref-food-stats span,
-        .sb-reference-dashboard .ref-summary-tile small {
-          color: #687a70;
-        }
+          .db-device-visual {
+            width: 38%;
+            display: grid;
+            place-items: center;
+          }
 
-        .sb-reference-dashboard .ref-weekly-track {
-          background: #f0f3ef;
-        }
+          .db-device-box {
+            width: clamp(52px, 6vw, 86px);
+            height: clamp(42px, 4.6vw, 62px);
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            border: 5px solid #9cb8a4;
+            background: #dce7d8;
+            color: #376b50;
+            transform: rotate(-12deg);
+            box-shadow:
+              0 10px 18px rgba(0, 0, 0, 0.18),
+              inset 0 -10px 0 rgba(60, 100, 70, 0.12);
+            animation: dbFloat 4s ease-in-out infinite;
+          }
 
-        .sb-reference-dashboard .ref-weekly-fill {
-          background: #b6cbb9;
-        }
+          @keyframes dbFloat {
+            0%, 100% { transform: rotate(-12deg) translateY(0); }
+            50% { transform: rotate(-9deg) translateY(-4px); }
+          }
 
-        .sb-reference-dashboard
-        .ref-weekly-day[aria-pressed='true']
-        .ref-weekly-fill {
-          background: #376b50;
-        }
+          .db-device-info {
+            flex: 1;
+            min-width: 0;
+            padding-left: 14px;
+            border-left: 1px solid rgba(255, 255, 255, 0.25);
+          }
 
-        .sb-reference-dashboard
-        .ref-trends-svg line[stroke='#edf0eb'] {
-          stroke: #e5ebe4;
-        }
+          .db-device-info p {
+            margin: 0 0 2px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.8);
+          }
 
-        .sb-reference-dashboard .ref-trends-svg text {
-          fill: #819087;
-        }
+          .db-device-info strong {
+            display: block;
+            font-size: clamp(18px, 2vw, 28px);
+            letter-spacing: -0.5px;
+            white-space: nowrap;
+          }
 
-        /* DARK MODE */
+          .db-device-info span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.72);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-food,
+          /* ================= INSIGHTS ================= */
+          .db-insights {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            gap: 8px;
+            overflow: hidden;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-summary-tile {
-          background: #2b4437;
-          border: 1px solid rgba(202,228,205,0.1);
-          color: #f0f6ef;
-        }
+          .db-insight {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 12.5px;
+            line-height: 1.45;
+            padding: 8px 10px;
+            border-radius: 12px;
+            background: var(--db-tile);
+            border: 1px solid var(--db-border);
+            color: var(--db-text);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-food-info strong,
+          .db-insight svg {
+            flex-shrink: 0;
+            margin-top: 2px;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-food-stats strong,
+          .db-insight.ok svg { color: var(--db-ok); }
+          .db-insight.near svg { color: var(--db-near); }
+          .db-insight.over svg { color: var(--db-over); }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-summary-tile strong {
-          color: #f3f8f1;
-        }
+          /* ================= TRENDS ================= */
+          .db-tabs {
+            display: flex;
+            gap: 5px;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-food-info span,
+          .db-tabs button {
+            padding: 5px 10px;
+            border-radius: 9px;
+            border: 1px solid var(--db-border);
+            background: var(--db-surface);
+            color: var(--db-text);
+            font-size: 11px;
+            font-weight: 700;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-food-stats span,
+          .db-tabs button.on {
+            border-color: var(--db-t);
+            background: var(--db-t);
+            color: #ffffff;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-summary-tile small {
-          color: #b5cbbd;
-        }
+          [data-theme="dark"] .db-tabs button.on {
+            color: #173c2a;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-summary-tile svg {
-          color: #a2d0ae;
-        }
+          .db-chart {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-heading-icon {
-          background: #dcebe0;
-          color: #376b50;
-        }
+          .db-chart svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-more {
-          background: #345240;
-          color: #e1efe2;
-        }
+          .db-y-label {
+            position: absolute;
+            left: 0;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: var(--db-muted);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-weekly-track {
-          background: #345041;
-        }
+          .db-ref-tag {
+            position: absolute;
+            right: 0;
+            transform: translateY(-120%);
+            padding: 1px 7px;
+            border-radius: 6px;
+            border: 1px solid var(--db-border);
+            background: var(--db-surface);
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--db-muted);
+            pointer-events: none;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-weekly-fill {
-          background: #81aa8d;
-        }
+          .db-point {
+            position: absolute;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            border: 3px solid var(--db-surface);
+            background: var(--db-t);
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 5px color-mix(in srgb, var(--db-t) 22%, transparent);
+            pointer-events: none;
+            transition: left 0.35s ease, top 0.35s ease;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard
-        .ref-weekly-day[aria-pressed='true']
-        .ref-weekly-fill {
-          background: #b6dec0;
-        }
+          .db-bubble-anchor {
+            position: absolute;
+            z-index: 2;
+            transform: translate(-50%, calc(-100% - 14px));
+            pointer-events: none;
+            transition: left 0.35s ease, top 0.35s ease;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard
-        .ref-weekly-day[aria-pressed='true'] {
-          color: #c6e9cd;
-        }
+          .db-bubble-anchor.below {
+            transform: translate(-50%, 14px);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-percent {
-          background: #dcebe0;
-          color: #27523b;
-        }
+          .db-bubble {
+            position: relative;
+            display: block;
+            padding: 5px 9px;
+            border-radius: 8px;
+            background: var(--db-bubble);
+            color: var(--db-bubble-text);
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard
-        .ref-trends-svg line[stroke='#edf0eb'] {
-          stroke: #476253;
-        }
+          .db-bubble-anchor.below .db-bubble::after {
+            top: -4px;
+            bottom: auto;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-trends-svg text {
-          fill: #b5cbbd;
-        }
+          .db-bubble::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -4px;
+            width: 8px;
+            height: 8px;
+            background: inherit;
+            transform: translateX(-50%) rotate(45deg);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard
-        .ref-trends-svg path[stroke='#376b50'] {
-          stroke: #a1d7ae;
-        }
+          .db-day {
+            position: absolute;
+            bottom: 0;
+            transform: translateX(-50%);
+            padding: 3px 7px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: var(--db-muted);
+            font-size: 11px;
+            font-weight: 600;
+            transition: background-color 0.2s ease, color 0.2s ease;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard
-        .ref-trends-svg circle[fill='#376b50'] {
-          fill: #a1d7ae;
-          stroke: #20392c;
-        }
+          .db-day:hover {
+            background: var(--db-soft);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-trends-value {
-          background: #b6dec0;
-          color: #20392c;
-        }
+          .db-day.on {
+            background: var(--db-soft);
+            color: var(--db-ink);
+            font-weight: 800;
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard
-        .ref-device .ref-heading-icon {
-          background: rgba(255,255,255,0.14);
-          color: white;
-        }
+          .db-day.today::after {
+            content: '';
+            display: block;
+            width: 4px;
+            height: 4px;
+            margin: 2px auto 0;
+            border-radius: 50%;
+            background: var(--db-t);
+          }
 
-        html[data-theme='dark']
-        .sb-reference-dashboard .ref-device-status {
-          background: #f6f8f5;
-          color: #31513c;
-        }
+          /* ================= TODAY'S MEALS ================= */
+          .db-meal-list {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            overflow: hidden;
+          }
 
-      `}</style>
+          .db-meal {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 10px;
+            border-radius: 12px;
+            background: var(--db-tile);
+            border: 1px solid var(--db-border);
+          }
 
-      <div className="ref-grid">
+          .db-meal-emoji {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            font-size: 19px;
+            background: color-mix(in srgb, var(--db-c) 18%, transparent);
+          }
 
-        {/* ============================= */}
-        {/* 1. TODAY'S NUTRITION           */}
-        {/* ============================= */}
+          .db-meal-info {
+            flex: 1;
+            min-width: 0;
+          }
 
-        <motion.section
-          {...cardAnimation}
-          className="ref-card ref-nutrition"
-        >
+          .db-meal-info strong {
+            display: block;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
 
-          <div className="ref-heading">
+          .db-meal-info span {
+            font-size: 10px;
+            color: var(--db-muted);
+          }
 
-            <div className="ref-heading-left">
+          .db-meal-kcal {
+            flex-shrink: 0;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--db-ink);
+          }
 
-              <span className="ref-heading-icon">
-                <Leaf size={19} />
-              </span>
+          .db-meal-more {
+            font-size: 11px;
+            color: var(--db-muted);
+            text-align: center;
+          }
 
-              <div>
-                <h3>Today's Nutrition</h3>
-                <p>Your daily nutrition progress</p>
+          .db-meal-empty {
+            flex: 1;
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            gap: 6px;
+            border: 1.5px dashed var(--db-border);
+            border-radius: 14px;
+            font-size: 12px;
+            color: var(--db-muted);
+          }
+
+          /* ================= RESPONSIVE ================= */
+          @media (max-height: 800px) {
+            .db-grid { gap: 9px; }
+            .db-card { padding: 11px; border-radius: 16px; }
+            .db-heading { margin-bottom: 8px; }
+            .db-heading-icon { width: 28px; height: 28px; }
+            .db-nutrient { padding: 7px 0; }
+            .db-food { padding: 6px 9px 10px; }
+            .db-food-emoji, .db-food-empty { width: 34px; height: 34px; font-size: 20px; }
+            .db-insight { font-size: 11px; }
+          }
+
+          @media (max-width: 1100px) {
+            .db-heading p { display: none; }
+            .db-food-info span { display: none; }
+          }
+
+          @media (max-width: 900px) {
+            .db-page { height: auto; overflow: visible; }
+            .db-grid {
+              grid-template-columns: 1fr;
+              grid-template-rows: auto;
+              grid-template-areas: "nutrition" "lunchbox" "right" "trends" "meals";
+            }
+            .db-nutrition, .db-lunchbox { min-height: 300px; }
+            .db-right { grid-template-rows: auto auto; }
+            .db-device, .db-insights-card { min-height: 170px; }
+            .db-trends { min-height: 280px; }
+            .db-meals { min-height: 240px; }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .db-page *,
+            .db-page *::before,
+            .db-page *::after {
+              animation: none !important;
+              transition: none !important;
+            }
+          }
+        `}</style>
+
+        <div className="db-grid">
+          {/* ================= 1. TODAY'S NUTRITION ================= */}
+          <motion.section {...card(0)} className="db-card db-nutrition">
+            <div className="db-heading">
+              <div className="db-heading-left">
+                <span className="db-heading-icon">
+                  <Leaf size={18} />
+                </span>
+                <div>
+                  <h3>Today's Nutrition</h3>
+                  <p>Your daily nutrition progress</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="db-nutrition-body">
+              <div className="db-rings">
+                <CalorieRing
+                  consumed={Math.round(totals.calories)}
+                  goal={calorieGoal}
+                  sugarConsumed={totals.sugar}
+                  sugarGoal={sugarGoal}
+                  sodiumConsumed={totals.sodium}
+                  sodiumGoal={sodiumGoal}
+                />
               </div>
 
-            </div>
-
-            <span className="ref-more">
-              •••
-            </span>
-
-          </div>
-
-          <div className="ref-nutrition-body">
-
-            <div className="ref-rings">
-
-              <CalorieRing
-                consumed={totals.calories}
-                goal={calorieGoal}
-                sugarConsumed={totals.sugar}
-                sugarGoal={sugarGoal}
-                sodiumConsumed={totals.sodium}
-                sodiumGoal={sodiumGoal}
-              />
-
-            </div>
-
-            <div className="ref-nutrient-list">
-
-              {nutrients.map(item => (
-
-                <div
-                  className="ref-nutrient"
-                  key={item.label}
-                >
-
-                  <div className="ref-nutrient-top">
-
-                    <span
-                      className="ref-dot"
-                      style={{
-                        background: item.color,
-                      }}
-                    />
-
-                    <span className="ref-nutrient-label">
-                      {item.label}
-                    </span>
-
-                  </div>
-
-                  <div className="ref-nutrient-bottom">
-
-                    <div className="ref-nutrient-value">
-
-                      <strong>
-                        {item.value}
-                      </strong>
-
-                      <span>
-                        {' / '}
-                        {item.goal} {item.unit}
+              <div className="db-nutrient-list">
+                {nutrients.map(item => (
+                  <div className="db-nutrient" key={item.label}>
+                    <div className="db-nutrient-top">
+                      <span className="db-nutrient-label">
+                        <span className="db-dot" style={{ background: item.color }} />
+                        {item.label}
                       </span>
 
+                      {item.status ? (
+                        <span className={`db-chip ${item.status}`}>
+                          {item.status === 'ok'
+                            ? 'Within limit'
+                            : item.status === 'near'
+                              ? 'Near limit'
+                              : 'Above limit'}
+                        </span>
+                      ) : (
+                        <span className="db-chip info">Reference</span>
+                      )}
                     </div>
 
-                    <span className="ref-percent">
-                      {item.percentage}%
-                    </span>
-
+                    <div className="db-nutrient-bottom">
+                      <span>
+                        <strong className="db-num">{item.value}</strong> / {item.goal}{' '}
+                        {item.unit}
+                      </span>
+                      <b className="db-num">{item.percentage}%</b>
+                    </div>
                   </div>
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </div>
-
-        </motion.section>
-
-        {/* ============================= */}
-        {/* 2. SMART LUNCHBOX              */}
-        {/* ============================= */}
-
-        <motion.section
-          {...cardAnimation}
-          transition={{
-            duration: 0.4,
-            delay: 0.05,
-          }}
-          className="ref-card ref-lunchbox"
-        >
-
-          <div className="ref-heading">
-
-            <div className="ref-heading-left">
-
-              <span className="ref-heading-icon">
-                <Layers3 size={19} />
-              </span>
-
-              <div>
-                <h3>Smart Lunchbox</h3>
-                <p>Food in each compartment</p>
+                ))}
               </div>
-
             </div>
-
-            <span className="ref-more">
-              •••
-            </span>
-
-          </div>
-
-          <div className="ref-food-list">
-
-            {FOODS.map(food => (
-
-              <div
-                className="ref-food"
-                key={food.compartment}
-              >
-
-                <span
-                  className="ref-food-emoji"
-                  role="img"
-                  aria-label={food.name}
-                >
-                  {food.emoji}
-                </span>
-
-                <div className="ref-food-info">
-
-                  <strong>
-                    {food.name}
-                  </strong>
-
-                  <span>
-                    {food.category}
-                  </span>
-
-                </div>
-
-                <div className="ref-food-stats">
-
-                  <strong>
-                    {food.weight} g
-                  </strong>
-
-                  <span>
-                    {food.calories} kcal
-                  </span>
-
-                </div>
-
-              </div>
-
-            ))}
-
-          </div>
-
-        </motion.section>
-
-        {/* ============================= */}
-        {/* TOP RIGHT STACK                */}
-        {/* ============================= */}
-
-        <div className="ref-right">
-
-          {/* 3. WEEKLY CALORIES */}
-
-          <motion.section
-            {...cardAnimation}
-            transition={{
-              duration: 0.4,
-              delay: 0.1,
-            }}
-            className="ref-card ref-weekly"
-          >
-
-            <div className="ref-heading">
-
-              <div className="ref-heading-left">
-
-                <span className="ref-heading-icon">
-                  <Activity size={18} />
-                </span>
-
-                <div>
-                  <h3>Weekly Calories</h3>
-                  <p>Recorded meals this week</p>
-                </div>
-
-              </div>
-
-              <span className="ref-more">
-                This Week
-              </span>
-
-            </div>
-
-            <MiniChart
-              data={WEEK.map(day => ({
-                label: day.day,
-                value: day.calories,
-              }))}
-              selectedIndex={selectedDay}
-              onSelect={setSelectedDay}
-            />
-
           </motion.section>
 
-          {/* ============================= */}
-          {/* 4. LIVE ESP32 DEVICE OVERVIEW  */}
-          {/* ============================= */}
-
-          <motion.section
-            {...cardAnimation}
-            transition={{
-              duration: 0.4,
-              delay: 0.15,
-            }}
-            className="ref-card ref-device"
-          >
-
-            <div className="ref-heading">
-
-              <div className="ref-heading-left">
-
-                <span className="ref-heading-icon">
-                  <Cpu size={18} />
+          {/* ================= 2. SMART LUNCHBOX ================= */}
+          <motion.section {...card(0.05)} className="db-card db-lunchbox">
+            <div className="db-heading">
+              <div className="db-heading-left">
+                <span className="db-heading-icon">
+                  <Layers3 size={18} />
                 </span>
-
                 <div>
-                  <h3>Device Overview</h3>
+                  <h3>Smart Lunchbox</h3>
+                  <p>Food in each compartment</p>
                 </div>
-
               </div>
-
-              {/* SHARED ONLINE/OFFLINE STATUS */}
-
-              <span
-                className="ref-device-status"
-                title={
-                  isOnline
-                    ? 'BiteWise ESP32 connected'
-                    : 'BiteWise ESP32 disconnected'
-                }
-                role="status"
-              >
-
-                <span
-                  className={
-                    `ref-status-dot ${
-                      isOnline ? 'is-online' : ''
-                    }`
-                  }
-
-                  style={{
-                    background: statusColor,
-                  }}
-                />
-
-                {statusLabel}
-
-              </span>
-
             </div>
 
-            <div className="ref-device-content">
-
-              {/* LUNCHBOX VISUAL */}
-
-              <div className="ref-device-visual">
-
-                <div className="ref-device-box">
-                  <Utensils size={26} />
-                </div>
-
-              </div>
-
-              {/* LIVE LOAD CELL WEIGHT */}
-
-              <div className="ref-device-info">
-
-                <p>Live Weight</p>
-
-                <strong aria-live="polite">
-                  {displayedWeight}
-                </strong>
-
-                <span>
-
-                  {isOnline
-                    ? hasValidWeight
-                      ? 'Actual HX711 sensor reading'
-                      : 'Waiting for sensor reading'
-                    : 'Waiting for ESP32'}
-
-                </span>
-
-                <span className="ref-live-source">
-
-                  {isOnline ? (
-                    <Wifi size={10} />
+            <div className="db-food-list">
+              {FOODS.map(food => (
+                <div
+                  key={food.compartment}
+                  className="db-food"
+                  style={{ ['--db-c' as string]: `var(--db-c${food.compartment})` }}
+                >
+                  {food.emoji ? (
+                    <span className="db-food-emoji" role="img" aria-label={food.name}>
+                      {food.emoji}
+                    </span>
                   ) : (
-                    <WifiOff size={10} />
+                    <span className="db-food-empty" aria-hidden="true" />
                   )}
 
-                  {isOnline
-                    ? hasValidWeight
-                      ? 'Live ESP32 data'
-                      : 'ESP32 connected'
-                    : 'No live weight data'}
+                  <div className="db-food-info">
+                    <strong>{food.name}</strong>
+                    <span>
+                      <i />
+                      Compartment {food.compartment}
+                    </span>
+                  </div>
 
-                </span>
+                  <div className="db-food-stats db-num">
+                    <strong>{food.weight} g</strong>
+                    <span>{food.calories} kcal</span>
+                  </div>
 
-                {isOnline && hasValidWeight && (
-
-                  <span className="ref-live-update">
-                    Automatically updating
+                  <span className="db-food-fill" aria-hidden="true">
+                    <motion.span
+                      initial={{ width: 0 }}
+                      animate={{ width: `${food.share}%` }}
+                      transition={{ duration: 0.7, delay: 0.3 }}
+                    />
                   </span>
-
-                )}
-
-              </div>
-
+                </div>
+              ))}
             </div>
-
           </motion.section>
 
-        </div>
+          {/* ================= 3 + 4. DEVICE + INSIGHTS ================= */}
+          <div className="db-right">
+            <motion.section {...card(0.1)} className="db-card db-device">
+              <div className="db-heading">
+                <div className="db-heading-left">
+                  <span className="db-heading-icon">
+                    <Cpu size={17} />
+                  </span>
+                  <div>
+                    <h3>Device Overview</h3>
+                  </div>
+                </div>
 
-        {/* ============================= */}
-        {/* 5. NUTRITION TRENDS            */}
-        {/* ============================= */}
-
-        <motion.section
-          {...cardAnimation}
-          transition={{
-            duration: 0.4,
-            delay: 0.2,
-          }}
-          className="ref-card ref-trends"
-        >
-
-          <div className="ref-heading">
-
-            <div className="ref-heading-left">
-
-              <span className="ref-heading-icon">
-                <TrendingUp size={19} />
-              </span>
-
-              <div>
-                <h3>Nutrition Trends</h3>
-
-                <p>
-                  Your daily calorie intake this week
-                </p>
+                <span className="db-device-status" role="status">
+                  <span className={`db-status-dot ${isOnline ? 'online' : ''}`} />
+                  {isOnline ? 'Online' : 'Offline'}
+                </span>
               </div>
 
-            </div>
+              <div className="db-device-content">
+                <div className="db-device-visual">
+                  <div className="db-device-box">
+                    <Utensils size={24} />
+                  </div>
+                </div>
 
-            <span className="ref-more">
-              Calories
-            </span>
+                <div className="db-device-info">
+                  <p>Live Weight</p>
+                  <strong className="db-num" aria-live="polite">
+                    {displayedWeight}
+                  </strong>
+                  <span>
+                    {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
+                    {isOnline
+                      ? hasValidWeight
+                        ? 'Live HX711 reading'
+                        : 'Waiting for sensor reading'
+                      : 'Waiting for ESP32'}
+                  </span>
+                </div>
+              </div>
+            </motion.section>
 
+            <motion.section {...card(0.15)} className="db-card db-insights-card">
+              <div className="db-heading">
+                <div className="db-heading-left">
+                  <span className="db-heading-icon">
+                    <Lightbulb size={17} />
+                  </span>
+                  <div>
+                    <h3>Daily Insight</h3>
+                    <p>Based on today's meals</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="db-insights">
+                {insights.map(item => (
+                  <div key={item.text} className={`db-insight ${item.status}`}>
+                    {item.status === 'ok' ? (
+                      <CheckCircle2 size={14} />
+                    ) : (
+                      <AlertTriangle size={14} />
+                    )}
+                    <span className="db-num">{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.section>
           </div>
 
-          <div className="ref-trends-chart">
+          {/* ================= 5. WEEKLY TRENDS (merged chart) ================= */}
+          <motion.section
+            {...card(0.2)}
+            className="db-card db-trends"
+            style={{ ['--db-t' as string]: currentTrend.color }}
+          >
+            <div className="db-heading">
+              <div className="db-heading-left">
+                <span className="db-heading-icon">
+                  <TrendingUp size={18} />
+                </span>
+                <div>
+                  <h3>This Week</h3>
+                  <p>
+                    Daily {currentTrend.label.toLowerCase()} from Meal History ·{' '}
+                    {currentTrend.isLimit ? 'limit' : 'reference'}{' '}
+                    {currentTrend.goal.toLocaleString()} {currentTrend.unit}
+                  </p>
+                </div>
+              </div>
 
-            <span className="ref-trends-value">
-
-              {Math.round(
-                highlighted.calories
-              ).toLocaleString()} kcal
-
-            </span>
-
-            <svg
-              className="ref-trends-svg"
-              viewBox="0 0 620 175"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Weekly calorie trend from Meal History"
-            >
-
-              <defs>
-
-                <linearGradient
-                  id="sb-trend-gradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-
-                  <stop
-                    offset="0%"
-                    stopColor="#376b50"
-                    stopOpacity="0.75"
-                  />
-
-                  <stop
-                    offset="100%"
-                    stopColor="#a9c9ae"
-                    stopOpacity="0.2"
-                  />
-
-                </linearGradient>
-
-              </defs>
-
-              {/* HORIZONTAL GRID LINES */}
-
-              {[25, 65, 105, 145].map(y => (
-
-                <line
-                  key={y}
-                  x1="40"
-                  y1={y}
-                  x2="610"
-                  y2={y}
-                  stroke="#edf0eb"
-                  strokeWidth="1"
-                />
-
-              ))}
-
-              {/* Y-AXIS LABELS */}
-
-              {[0, 1, 2, 3].map(index => {
-
-                const value =
-                  chartMax -
-                  (index * chartMax) / 3
-
-                return (
-
-                  <text
-                    key={index}
-                    x="33"
-                    y={29 + index * 40}
-                    textAnchor="end"
-                    fontSize="11"
-                    fill="#8b958d"
+              <div className="db-tabs" role="group" aria-label="Nutrient">
+                {(Object.keys(trendConfig) as TrendKey[]).map(key => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={trend === key ? 'on' : ''}
+                    aria-pressed={trend === key}
+                    style={{ ['--db-t' as string]: trendConfig[key].color }}
+                    onClick={() => setTrend(key)}
                   >
+                    {trendConfig[key].label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                    {Math.round(
-                      value
-                    ).toLocaleString()}
-
-                  </text>
-
+            <div className="db-chart">
+              {/* Y labels */}
+              {[0, 0.5, 1].map(ratio => {
+                const value = chartMax * ratio
+                return (
+                  <span
+                    key={ratio}
+                    className="db-y-label db-num"
+                    style={{ top: `${(pointY(value) / CHART_H) * 100}%` }}
+                  >
+                    {formatTrend(value)}
+                  </span>
                 )
               })}
 
-              {/* FILLED CHART AREA */}
+              <svg
+                viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+                preserveAspectRatio="none"
+                role="img"
+                aria-label={`Daily ${currentTrend.label.toLowerCase()} this week`}
+              >
+                <defs>
+                  <clipPath id="db-trend-reveal">
+                    <motion.rect
+                      key={`reveal-${trend}`}
+                      x="0"
+                      y="0"
+                      height={CHART_H}
+                      initial={{ width: 0 }}
+                      animate={{ width: CHART_W }}
+                      transition={{ duration: 0.8, ease: 'easeOut' }}
+                    />
+                  </clipPath>
 
-              <path
-                d={trendArea}
-                fill="url(#sb-trend-gradient)"
-              />
+                  <linearGradient id="db-trend-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.35" />
+                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
+                  </linearGradient>
+                </defs>
 
-              {/* TREND LINE */}
+                <g style={{ color: currentTrend.color }}>
+                  {[Y_TOP, (Y_TOP + Y_BOTTOM) / 2, Y_BOTTOM].map(y => (
+                    <line
+                      key={y}
+                      x1={X_START - 6}
+                      x2={X_END + 6}
+                      y1={y}
+                      y2={y}
+                      stroke="var(--db-border)"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
 
-              <path
-                d={trendLine}
-                fill="none"
-                stroke="#376b50"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
+                  {/* reference / limit */}
+                  <line
+                    x1={X_START - 6}
+                    x2={X_END + 6}
+                    y1={referenceY}
+                    y2={referenceY}
+                    stroke="var(--db-muted)"
+                    strokeDasharray="5 5"
+                    strokeWidth="1.5"
+                    vectorEffect="non-scaling-stroke"
+                    opacity="0.7"
+                  />
 
-              {/* SELECTED DAY LINE */}
+                  <g clipPath="url(#db-trend-reveal)">
+                    <path d={trendArea} fill="url(#db-trend-fill)" />
 
-              <line
-                x1={pointX(selectedDay)}
-                y1={pointY(highlighted.calories)}
-                x2={pointX(selectedDay)}
-                y2="150"
-                stroke="#376b50"
-                strokeDasharray="3 4"
-                strokeOpacity="0.5"
-              />
+                    <path
+                      d={trendLine}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
 
-              {/* SELECTED DAY POINT */}
+                  <line
+                    x1={pointX(selectedDay)}
+                    x2={pointX(selectedDay)}
+                    y1={pointY(selectedValue)}
+                    y2={Y_BOTTOM}
+                    stroke="currentColor"
+                    strokeDasharray="3 4"
+                    strokeOpacity="0.5"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              </svg>
 
-              <circle
-                cx={pointX(selectedDay)}
-                cy={pointY(highlighted.calories)}
-                r="6"
-                fill="#376b50"
-                stroke="white"
-                strokeWidth="3"
-              />
-
-              {/* DAY LABELS */}
-
-              {WEEK.map((item, index) => (
-
-                <text
-                  key={item.day}
-                  x={pointX(index)}
-                  y="170"
-                  fontSize="11"
-                  textAnchor="middle"
-                  fill="#8b958d"
-                >
-
-                  {item.day}
-
-                </text>
-
-              ))}
-
-            </svg>
-
-          </div>
-
-        </motion.section>
-
-        {/* ============================= */}
-        {/* 6. MEAL SUMMARY                */}
-        {/* ============================= */}
-
-        <motion.section
-          {...cardAnimation}
-          transition={{
-            duration: 0.4,
-            delay: 0.25,
-          }}
-          className="ref-card ref-summary"
-        >
-
-          <div className="ref-heading">
-
-            <div className="ref-heading-left">
-
-              <span className="ref-heading-icon">
-                <Utensils size={19} />
+              <span
+                className="db-ref-tag db-num"
+                style={{ top: `${(referenceY / CHART_H) * 100}%` }}
+              >
+                {currentTrend.isLimit ? 'Limit' : 'Reference'}{' '}
+                {currentTrend.goal.toLocaleString()} {currentTrend.unit}
               </span>
 
-              <div>
-                <h3>Meal Summary</h3>
+              {/* selected point + bubble, positioned on the real data point */}
+              <span
+                className="db-point"
+                style={{
+                  left: `${(pointX(selectedDay) / CHART_W) * 100}%`,
+                  top: `${(pointY(selectedValue) / CHART_H) * 100}%`,
+                }}
+              />
 
-                <p>
-                  Today's total meal information
-                </p>
+              <span
+                className={`db-bubble-anchor ${
+                  pointY(selectedValue) < 60 ? 'below' : ''
+                }`}
+                style={{
+                  left: `${(pointX(selectedDay) / CHART_W) * 100}%`,
+                  top: `${(pointY(selectedValue) / CHART_H) * 100}%`,
+                }}
+              >
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={`${trend}-${selectedDay}`}
+                    className="db-bubble db-num"
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    {selected.day} · {formatTrend(selectedValue)} {currentTrend.unit}
+                    {selectedStatus === 'over' && ' · above limit'}
+                  </motion.span>
+                </AnimatePresence>
+              </span>
+
+              {/* day buttons, aligned with each point */}
+              {WEEK.map((day, index) => (
+                <button
+                  key={day.full}
+                  type="button"
+                  className={`db-day ${index === selectedDay ? 'on' : ''} ${
+                    day.isToday ? 'today' : ''
+                  }`}
+                  style={{ left: `${(pointX(index) / CHART_W) * 100}%` }}
+                  aria-pressed={index === selectedDay}
+                  aria-label={`${day.full}: ${formatTrend(day[trend])} ${currentTrend.unit}`}
+                  onClick={() => setSelectedDay(index)}
+                >
+                  {day.day}
+                </button>
+              ))}
+            </div>
+          </motion.section>
+
+          {/* ================= 6. TODAY'S MEALS ================= */}
+          <motion.section {...card(0.25)} className="db-card db-meals">
+            <div className="db-heading">
+              <div className="db-heading-left">
+                <span className="db-heading-icon">
+                  <Clock3 size={18} />
+                </span>
+                <div>
+                  <h3>Today's Meals</h3>
+                  <p className="db-num">
+                    {todayMeals.length} {todayMeals.length === 1 ? 'meal' : 'meals'} ·{' '}
+                    {Math.round(totals.weight)} g · {Math.round(totals.calories)} kcal
+                  </p>
+                </div>
               </div>
-
             </div>
 
-            <span className="ref-more">
-              •••
-            </span>
+            {todayMeals.length === 0 ? (
+              <div className="db-meal-empty">
+                <Utensils size={22} />
+                No meals recorded yet today.
+              </div>
+            ) : (
+              <div className="db-meal-list">
+                {todayMeals.slice(0, 4).map((meal, index) => (
+                  <motion.div
+                    key={meal.id}
+                    className="db-meal"
+                    style={{ ['--db-c' as string]: `var(--db-c${meal.compartment})` }}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.3 + index * 0.06 }}
+                  >
+                    <span className="db-meal-emoji" aria-hidden="true">
+                      {meal.emoji}
+                    </span>
 
-          </div>
+                    <div className="db-meal-info">
+                      <strong>{meal.food}</strong>
+                      <span className="db-num">
+                        {meal.time} · Compartment {meal.compartment} · {meal.weight} g
+                      </span>
+                    </div>
 
-          <div className="ref-summary-grid">
+                    <span className="db-meal-kcal db-num">
+                      {Math.round(nutrition(meal).calories)} kcal
+                    </span>
+                  </motion.div>
+                ))}
 
-            {/* MEAL CALORIES */}
-
-            <div className="ref-summary-tile">
-
-              <Flame size={25} />
-
-              <strong>
-                {totalCalories} kcal
-              </strong>
-
-              <small>
-                Total Meal Calories
-              </small>
-
-            </div>
-
-            {/* RECORDED MEAL WEIGHT */}
-
-            <div className="ref-summary-tile">
-
-              <Scale size={25} />
-
-              <strong>
-                {totalWeight} g
-              </strong>
-
-              <small>
-                Total Weight
-              </small>
-
-            </div>
-
-            {/* OCCUPIED COMPARTMENTS */}
-
-            <div className="ref-summary-tile">
-
-              <Layers3 size={25} />
-
-              <strong>
-
-                {FOODS.filter(
-                  food => food.weight > 0
-                ).length}
-
-              </strong>
-
-              <small>
-                Compartments
-              </small>
-
-            </div>
-
-          </div>
-
-        </motion.section>
-
+                {todayMeals.length > 4 && (
+                  <span className="db-meal-more">
+                    +{todayMeals.length - 4} more in Meal History
+                  </span>
+                )}
+              </div>
+            )}
+          </motion.section>
+        </div>
       </div>
-
-    </div>
+    </MotionConfig>
   )
 }
