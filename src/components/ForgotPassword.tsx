@@ -1,22 +1,23 @@
-
 import { useState, type FormEvent } from 'react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, ArrowRight, Mail, ShieldCheck } from 'lucide-react'
+import AuthSplit from './AuthSplit'
+import { requestResetCode } from '../services/recovery'
 
 type ForgotPasswordProps = {
   onContinue?: (email: string) => void
   onBackToLogin?: () => void
 }
 
-export default function ForgotPassword({
-  onContinue,
-  onBackToLogin,
-}: ForgotPasswordProps) {
+export default function ForgotPassword({ onContinue, onBackToLogin }: ForgotPasswordProps) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
+  const [sending, setSending] = useState(false)
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (sending) return
+
     setError('')
 
     const cleanedEmail = email.trim().toLowerCase()
@@ -31,208 +32,102 @@ export default function ForgotPassword({
       return
     }
 
-    if (onContinue) {
-      onContinue(cleanedEmail)
-    } else {
-      setError('Password recovery is currently in preview mode.')
+    setSending(true)
+
+    try {
+      await requestResetCode(cleanedEmail)
+      onContinue?.(cleanedEmail)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to send the code.')
+    } finally {
+      setSending(false)
     }
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        color: 'var(--text)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 24,
-      }}
+    <AuthSplit
+      step={1}
+      heroTitle={
+        <>
+          Let's get you
+          <br />
+          back in.
+        </>
+      }
+      heroText="We'll email a 6-digit code from sustansyabox.support@gmail.com so you can safely set a new password."
     >
-      <motion.div
-        initial={{ opacity: 0, y: 25 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        style={{
-          width: '100%',
-          maxWidth: 460,
-          padding: 'clamp(24px, 5vw, 42px)',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 24,
-          boxShadow: '0 18px 55px rgba(0,0,0,0.06)',
-        }}
+      <button
+        className="auth-back"
+        type="button"
+        onClick={onBackToLogin}
+        disabled={!onBackToLogin || sending}
       >
-        <button
-          type="button"
-          onClick={onBackToLogin}
-          disabled={!onBackToLogin}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'transparent',
-            border: 0,
-            color: 'var(--primary)',
-            fontWeight: 700,
-            marginBottom: 32,
-            cursor: onBackToLogin ? 'pointer' : 'default',
-          }}
-        >
-          <ArrowLeft size={17} />
-          Back to Sign In
-        </button>
+        <ArrowLeft size={14} />
+        Back to Sign In
+      </button>
 
-        <div
-          style={{
-            width: 66,
-            height: 66,
-            borderRadius: 20,
-            background: '#DAD7CD',
-            color: '#344E41',
-            display: 'grid',
-            placeItems: 'center',
-            marginBottom: 26,
-          }}
-        >
-          <ShieldCheck size={30} />
+      <div className="auth-icon">
+        <ShieldCheck size={26} />
+      </div>
+
+      <p className="auth-eyebrow">ACCOUNT RECOVERY</p>
+      <h2 className="auth-heading">Forgot your password?</h2>
+      <p className="auth-subtitle">
+        No worries! Enter the email address of your SustansyaBox account and we'll
+        send you a code.
+      </p>
+
+      <form onSubmit={handleSubmit} noValidate>
+        <label className="auth-label" htmlFor="recovery-email">
+          Email address
+        </label>
+
+        <div className="auth-field">
+          <Mail className="auth-field-icon" size={16} />
+          <input
+            id="recovery-email"
+            className="auth-input"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={sending}
+            autoFocus
+          />
         </div>
 
-        <p
-          style={{
-            color: 'var(--primary)',
-            fontSize: 12,
-            fontWeight: 800,
-            letterSpacing: 2,
-            marginBottom: 12,
-          }}
-        >
-          ACCOUNT RECOVERY
-        </p>
-
-        <h1
-          style={{
-            fontSize: 32,
-            letterSpacing: '-1px',
-            margin: '0 0 12px',
-          }}
-        >
-          Forgot your password?
-        </h1>
-
-        <p
-          style={{
-            color: 'var(--muted)',
-            fontSize: 14,
-            lineHeight: 1.8,
-            marginBottom: 30,
-          }}
-        >
-          No worries! Enter the email address associated with your
-          SustansyaBox account to start resetting your password.
-        </p>
-
-        <form onSubmit={handleSubmit} noValidate>
-          <label
-            htmlFor="recovery-email"
-            style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 600,
-              marginBottom: 9,
-            }}
-          >
-            Email address
-          </label>
-
-          <div
-            style={{
-              position: 'relative',
-              marginBottom: 22,
-            }}
-          >
-            <Mail
-              size={18}
-              style={{
-                position: 'absolute',
-                left: 15,
-                top: 16,
-                color: 'var(--muted)',
-              }}
-            />
-
-            <input
-              id="recovery-email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              style={{
-                width: '100%',
-                height: 50,
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                background: 'var(--bg)',
-                color: 'var(--text)',
-                padding: '0 14px 0 44px',
-                outline: 'none',
-                fontSize: 14,
-              }}
-            />
-          </div>
-
+        <AnimatePresence mode="wait">
           {error && (
-            <p
+            <motion.p
+              key={error}
               role="alert"
-              style={{
-                color: '#B45342',
-                fontSize: 13,
-                marginBottom: 18,
-              }}
+              className="auth-alert"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
             >
               {error}
-            </p>
+            </motion.p>
           )}
+        </AnimatePresence>
 
-          <motion.button
-            type="submit"
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            style={{
-              width: '100%',
-              height: 52,
-              border: 0,
-              borderRadius: 12,
-              background: '#45634D',
-              color: '#FFFFFF',
-              fontSize: 15,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-              cursor: 'pointer',
-            }}
-          >
-            Continue
-            <ArrowRight size={18} />
-          </motion.button>
-        </form>
-
-        <p
-          style={{
-            marginTop: 26,
-            textAlign: 'center',
-            fontSize: 12,
-            color: 'var(--muted)',
-            lineHeight: 1.7,
-          }}
+        <motion.button
+          className="auth-submit"
+          type="submit"
+          disabled={sending}
+          whileHover={sending ? {} : { scale: 1.01 }}
+          whileTap={sending ? {} : { scale: 0.985 }}
         >
-          Password recovery is currently in demo mode.
-          No email will be sent yet.
-        </p>
-      </motion.div>
-    </div>
+          {sending ? 'Sending code…' : 'Send Code'}
+          {!sending && <ArrowRight size={17} />}
+        </motion.button>
+      </form>
+
+      <p className="auth-note">
+        Signed up with Google? You can also just use “Continue with Google” on the
+        sign-in page.
+      </p>
+    </AuthSplit>
   )
 }

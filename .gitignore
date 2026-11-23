@@ -28,3 +28,4 @@ dist-ssr
 .env.*
 !.env.example
 src/backend/vendor/
+mail_config.php
