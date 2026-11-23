@@ -1,4 +1,3 @@
-
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
@@ -189,7 +188,9 @@ try {
             email,
             age,
             height,
-            weight
+            weight,
+            sex,
+            activity_level
         FROM sustansyabox
         WHERE google_id = :google_id
         LIMIT 1

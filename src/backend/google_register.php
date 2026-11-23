@@ -1,4 +1,3 @@
-
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
@@ -109,6 +108,8 @@ $credential = $data["credential"] ?? null;
 $age = $data["age"] ?? null;
 $height = $data["height"] ?? null;
 $weight = $data["weight"] ?? null;
+$sex = $data["sex"] ?? null;
+$activityLevel = $data["activityLevel"] ?? "sedentary";
 
 if (
     !is_string($credential) ||
@@ -161,6 +162,17 @@ if (
     respond(422, [
         "success" => false,
         "message" => "Please check your profile information."
+    ]);
+}
+
+// Needed to estimate calories (FAO/WHO/UNU energy requirements).
+if (
+    !in_array($sex, ["male", "female"], true) ||
+    !in_array($activityLevel, ["sedentary", "moderate", "vigorous"], true)
+) {
+    respond(422, [
+        "success" => false,
+        "message" => "Please choose your sex and activity level."
     ]);
 }
 
@@ -279,6 +291,8 @@ try {
             age,
             height,
             weight,
+            sex,
+            activity_level,
             google_id
         )
         VALUES
@@ -289,6 +303,8 @@ try {
             :age,
             :height,
             :weight,
+            :sex,
+            :activity_level,
             :google_id
         )
     ");
@@ -300,6 +316,8 @@ try {
         ":age" => (int) $validAge,
         ":height" => $height,
         ":weight" => $weight,
+        ":sex" => $sex,
+        ":activity_level" => $activityLevel,
         ":google_id" => $googleId
     ]);
 
@@ -337,7 +355,9 @@ try {
             "email" => $email,
             "age" => (int) $validAge,
             "height" => $height,
-            "weight" => $weight
+            "weight" => $weight,
+            "sex" => $sex,
+            "activity_level" => $activityLevel
         ]
     ]);
 

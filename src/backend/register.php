@@ -1,4 +1,3 @@
-
 <?php
 
 header("Content-Type: application/json; charset=utf-8");
@@ -47,6 +46,8 @@ $password = $data["password"] ?? "";
 $age = $data["age"] ?? null;
 $height = $data["height"] ?? null;
 $weight = $data["weight"] ?? null;
+$sex = $data["sex"] ?? null;
+$activityLevel = $data["activityLevel"] ?? "sedentary";
 
 if (
     strlen($fullName) < 2 ||
@@ -73,14 +74,27 @@ if (
     exit;
 }
 
+// Needed to estimate calories (FAO/WHO/UNU energy requirements).
+if (
+    !in_array($sex, ["male", "female"], true) ||
+    !in_array($activityLevel, ["sedentary", "moderate", "vigorous"], true)
+) {
+    http_response_code(422);
+    echo json_encode([
+        "success" => false,
+        "message" => "Please choose your sex and activity level."
+    ]);
+    exit;
+}
+
 try {
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
     $statement = $pdo->prepare("
         INSERT INTO sustansyabox
-            (full_name, email, password_hash, age, height, weight)
+            (full_name, email, password_hash, age, height, weight, sex, activity_level)
         VALUES
-            (:full_name, :email, :password_hash, :age, :height, :weight)
+            (:full_name, :email, :password_hash, :age, :height, :weight, :sex, :activity_level)
     ");
 
     $statement->execute([
@@ -89,7 +103,9 @@ try {
         ":password_hash" => $passwordHash,
         ":age" => (int) $age,
         ":height" => (float) $height,
-        ":weight" => (float) $weight
+        ":weight" => (float) $weight,
+        ":sex" => $sex,
+        ":activity_level" => $activityLevel
     ]);
 
     http_response_code(201);

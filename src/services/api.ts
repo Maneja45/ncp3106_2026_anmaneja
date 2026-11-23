@@ -1,9 +1,11 @@
-
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV
     ? 'http://localhost/sustansyabox-api'
     : '/sustansyabox-api')
+
+export type Sex = 'male' | 'female'
+export type ActivityLevel = 'sedentary' | 'moderate' | 'vigorous'
 
 export interface DatabaseStatus {
   success: boolean
@@ -18,6 +20,8 @@ export interface RegisterRequest {
   age: number
   height: number
   weight: number
+  sex: Sex
+  activityLevel: ActivityLevel
 }
 
 export interface RegisterResponse {
@@ -70,6 +74,8 @@ export interface GoogleRegisterRequest {
   age: number
   height: number
   weight: number
+  sex: Sex
+  activityLevel: ActivityLevel
 }
 
 export interface GoogleRegisterResponse {
@@ -82,6 +88,8 @@ export interface GoogleRegisterResponse {
     age: number | null
     height: number | null
     weight: number | null
+    sex?: Sex | null
+    activity_level?: ActivityLevel | null
   }
 }
 

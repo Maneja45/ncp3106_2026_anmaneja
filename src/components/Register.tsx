@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import Velaris from '../ui/velaris'
 import {
@@ -15,6 +15,13 @@ import {
   Leaf,
 } from 'lucide-react'
 import { registerUser, registerGoogleUser, type GoogleRegisterResponse } from '../services/api'
+import {
+  ACTIVITY_LEVELS,
+  isValidInput,
+  personalTargets,
+  type ActivityLevel,
+  type Sex,
+} from '../services/nutrition'
 export type RegistrationData = {
   fullName: string
   email: string
@@ -22,6 +29,8 @@ export type RegistrationData = {
   age: number
   height: number
   weight: number
+  sex: Sex
+  activityLevel: ActivityLevel
 }
 type RegisterProps = {
   onRegister?: (data: RegistrationData) => void
@@ -47,12 +56,29 @@ export default function Register({
   const [age, setAge] = useState('')
   const [height, setHeight] = useState('')
   const [weight, setWeight] = useState('')
+  const [sex, setSex] = useState<Sex | ''>('')
+  const [activityLevel, setActivityLevel] =
+    useState<ActivityLevel>('sedentary')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Live preview of the daily targets (FAO/WHO/UNU + WHO)
+  const targets = useMemo(() => {
+    const input = {
+      age: Number(age),
+      height: Number(height),
+      weight: Number(weight),
+      sex: sex || undefined,
+      activity: activityLevel,
+    }
+    return isValidInput(input) && input.age >= 13
+      ? personalTargets(input)
+      : null
+  }, [age, height, weight, sex, activityLevel])
+
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
   ): Promise<void> => {
@@ -115,6 +141,10 @@ export default function Register({
       setError('Please enter a valid weight in kilograms.')
       return
     }
+    if (!sex) {
+      setError('Please choose your sex so we can estimate your daily calories.')
+      return
+    }
     setIsSubmitting(true)
     try {
       if (isGoogleRegistration && googleCredential) {
@@ -123,6 +153,8 @@ export default function Register({
           age: userAge,
           height: userHeight,
           weight: userWeight,
+          sex,
+          activityLevel,
         })
         if (!result.user) throw new Error('Google registration did not return an account.')
         setSuccess('Google account created successfully!')
@@ -135,6 +167,8 @@ export default function Register({
           age: userAge,
           height: userHeight,
           weight: userWeight,
+          sex,
+          activityLevel,
         }
         await registerUser(registrationData)
         setSuccess('Account created successfully! You can now sign in.')
@@ -162,7 +196,7 @@ export default function Register({
     <div className="register-page">
       <style>{`
         .register-page,
-        .register-page \* {
+        .register-page * {
           box-sizing: border-box;
         }
         .register-page {
@@ -311,6 +345,8 @@ export default function Register({
           justify-content: center;
           padding: 30px clamp(20px, 4vw, 70px);
           min-width: 0;
+          max-height: 100dvh;
+          overflow-y: auto;
           background: var(--reg-cream);
         }
         .register-form-inner {
@@ -444,6 +480,99 @@ export default function Register({
         .register-metrics .register-input-icon {
           left: 10px;
         }
+        .register-choices {
+          display: grid;
+          grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .register-segment {
+          display: flex;
+          gap: 4px;
+          padding: 3px;
+          border: 1px solid #dfe6dd;
+          border-radius: 11px;
+          background: #fff;
+        }
+        .register-segment button {
+          flex: 1;
+          min-width: 0;
+          height: 35px;
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          color: #5d6f63;
+          font-size: 11px;
+          font-weight: 750;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background .2s, color .2s;
+        }
+        .register-segment button:hover:not(:disabled) {
+          background: #f0f4ee;
+        }
+        .register-segment button.on {
+          background: #45634d;
+          color: #fff;
+        }
+        .register-segment button:disabled {
+          cursor: not-allowed;
+        }
+        .register-segment button:focus-visible {
+          outline: 2px solid #6e9976;
+          outline-offset: 1px;
+        }
+        .register-hint {
+          margin: 6px 0 0;
+          font-size: 10.5px;
+          color: #849087;
+        }
+        .register-targets {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 12px;
+          padding: 10px;
+          border-radius: 12px;
+          background: #eef4ec;
+          border: 1px solid #d9e6d6;
+        }
+        .register-targets-title {
+          grid-column: 1 / -1;
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+          color: #45634d;
+        }
+        .register-targets-title span {
+          font-weight: 600;
+          letter-spacing: 0;
+          text-transform: none;
+          color: #7b8980;
+        }
+        .register-target strong {
+          display: block;
+          font-size: 16px;
+          font-weight: 800;
+          color: #1c362b;
+          font-variant-numeric: tabular-nums;
+        }
+        .register-target small {
+          font-size: 10px;
+          color: #6c7d71;
+        }
+        .register-targets-empty {
+          margin-top: 12px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px dashed #d4ddd2;
+          font-size: 10.5px;
+          color: #849087;
+        }
         .register-error {
           background: #fff0ed;
           border: 1px solid #f2d0ca;
@@ -566,8 +695,8 @@ export default function Register({
           .register-hero::before {
             animation: none;
           }
-          .register-page \*,
-          .register-page \*::before {
+          .register-page *,
+          .register-page *::before {
             transition: none !important;
           }
         }
@@ -812,8 +941,8 @@ export default function Register({
             <section className="register-personal">
               <h3>Personal information</h3>
               <p>
-                This information will help personalize your
-                nutrition goals.
+                We use this to estimate your daily calories and
+                your sugar and sodium limits (FAO/WHO references).
               </p>
               <div className="register-metrics">
                 <div>
@@ -901,6 +1030,94 @@ export default function Register({
                   </div>
                 </div>
               </div>
+
+              <div className="register-choices">
+                <div>
+                  <span className="register-label" id="register-sex-label">
+                    Sex
+                  </span>
+                  <div
+                    className="register-segment"
+                    role="radiogroup"
+                    aria-labelledby="register-sex-label"
+                  >
+                    {(['female', 'male'] as Sex[]).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={sex === option}
+                        className={sex === option ? 'on' : ''}
+                        onClick={() => setSex(option)}
+                        disabled={isSubmitting}
+                      >
+                        {option === 'female' ? 'Female' : 'Male'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="register-label" id="register-activity-label">
+                    Activity level
+                  </span>
+                  <div
+                    className="register-segment"
+                    role="radiogroup"
+                    aria-labelledby="register-activity-label"
+                  >
+                    {(Object.keys(ACTIVITY_LEVELS) as ActivityLevel[]).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={activityLevel === option}
+                        className={activityLevel === option ? 'on' : ''}
+                        title={ACTIVITY_LEVELS[option].hint}
+                        onClick={() => setActivityLevel(option)}
+                        disabled={isSubmitting}
+                      >
+                        {ACTIVITY_LEVELS[option].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <p className="register-hint">
+                {ACTIVITY_LEVELS[activityLevel].label}:{' '}
+                {ACTIVITY_LEVELS[activityLevel].hint.toLowerCase()}.
+              </p>
+
+              {targets ? (
+                <div className="register-targets" aria-live="polite">
+                  <div className="register-targets-title">
+                    Your daily targets
+                    <span>
+                      {targets.bmi !== null
+                        ? `BMI ${targets.bmi} · ${targets.bmiLabel}`
+                        : 'WHO-based'}
+                    </span>
+                  </div>
+                  <div className="register-target">
+                    <strong>{targets.calories.toLocaleString()}</strong>
+                    <small>kcal / day</small>
+                  </div>
+                  <div className="register-target">
+                    <strong>&lt; {targets.sugar} g</strong>
+                    <small>sugar limit</small>
+                  </div>
+                  <div className="register-target">
+                    <strong>&lt; {targets.sodium.toLocaleString()} mg</strong>
+                    <small>sodium limit</small>
+                  </div>
+                </div>
+              ) : (
+                <p className="register-targets-empty">
+                  Fill in your age, height, weight, and sex to see
+                  your daily calorie, sugar, and sodium targets.
+                </p>
+              )}
             </section>
             <AnimatePresence mode="wait">
               {error && (
