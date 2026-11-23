@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from 'react'
 import {
   Bell,
@@ -38,7 +37,7 @@ type NotificationBellProps = {
   sodiumGoal?: number
 }
 
-const STORAGE_KEY = 'sustansyabox_notifications_v2'
+const STORAGE_KEY = 'sustansyabox_notifications_v3'
 
 const initialNotices: Notice[] = [
   {
@@ -49,15 +48,6 @@ const initialNotices: Notice[] = [
     time: 'Welcome',
     read: false,
     type: 'success',
-  },
-  {
-    id: 'preview',
-    title: 'Frontend Preview Mode',
-    message:
-      'Nutrition values are currently for demonstration. Physical device readings will be available after integration.',
-    time: 'System',
-    read: false,
-    type: 'info',
   },
 ]
 
@@ -105,6 +95,8 @@ function createNutritionNotice(
   }
 
   const percentage = (consumed / goal) * 100
+  const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+  const rounded = Math.round(consumed)
 
   if (percentage < 80) return null
 
@@ -124,16 +116,17 @@ function createNutritionNotice(
       : `${name} Intake Warning`
 
   const message = exceeded
-    ? `Your ${name.toLowerCase()} intake is ${consumed.toLocaleString()} ${unit}, exceeding your daily goal of ${goal.toLocaleString()} ${unit}.`
+    ? `Your ${name.toLowerCase()} intake today is ${rounded.toLocaleString()} ${unit}, above your daily limit of ${goal.toLocaleString()} ${unit}.`
     : reached
       ? `You have reached your daily ${name.toLowerCase()} goal of ${goal.toLocaleString()} ${unit}.`
       : `You have used ${Math.round(percentage)}% of your daily ${name.toLowerCase()} goal.`
 
   return {
-    id: `nutrition-${name.toLowerCase()}-${status}-${goal}`,
+    // One alert per nutrient, status and day
+    id: `nutrition-${name.toLowerCase()}-${status}-${goal}-${today}`,
     title,
-    message: `${message} (Preview data)`,
-    time: 'Nutrition preview',
+    message,
+    time: 'Today',
     read: false,
     type: exceeded ? 'critical' : 'warning',
   }
@@ -171,7 +164,7 @@ export default function NotificationBell({
     }
   }, [notices])
 
-  // Generate warnings from available nutrition preview values.
+  // Generate warnings from today's saved meals.
   useEffect(() => {
     const generated = [
       createNutritionNotice(
@@ -410,7 +403,7 @@ export default function NotificationBell({
           )}
 
           <p className="sb-notification-preview-note">
-            Nutrition alerts currently use preview data.
+            Nutrition alerts are based on the meals you saved today.
           </p>
         </section>
       )}

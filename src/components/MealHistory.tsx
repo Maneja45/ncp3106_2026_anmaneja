@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Activity,
@@ -25,8 +25,8 @@ type ModalMode = 'view' | 'edit' | 'delete'
 
 const FILTERS: Filter[] = ['All Meals', 'Today', 'This Week', 'This Month']
 
-/* General daily reference values used only for the progress visuals. */
-const REFERENCE = { calories: 2000, sugar: 50, sodium: 2000 }
+/* Fallback daily reference values (used when no personal targets are passed). */
+const DEFAULT_REFERENCE = { calories: 2000, sugar: 50, sodium: 2000 }
 
 const RING_R = 58
 const RING_C = 2 * Math.PI * RING_R
@@ -87,10 +87,26 @@ function mealTimestamp(meal: Meal) {
 
 type MealHistoryProps = {
   meals: Meal[]
-  setMeals: Dispatch<SetStateAction<Meal[]>>
+  onUpdate: (id: number, changes: { food: string; date: string; compartment: number }) => Promise<void>
+  onDelete: (id: number) => Promise<void>
+  calorieGoal?: number
+  sugarGoal?: number
+  sodiumGoal?: number
 }
 
-export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
+export default function MealHistory({
+  meals,
+  onUpdate,
+  onDelete,
+  calorieGoal,
+  sugarGoal,
+  sodiumGoal,
+}: MealHistoryProps) {
+  const REFERENCE = {
+    calories: calorieGoal || DEFAULT_REFERENCE.calories,
+    sugar: sugarGoal || DEFAULT_REFERENCE.sugar,
+    sodium: sodiumGoal || DEFAULT_REFERENCE.sodium,
+  }
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('All Meals')
   const [modalMode, setModalMode] = useState<ModalMode | null>(null)
@@ -99,6 +115,8 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
   const [editDate, setEditDate] = useState('')
   const [editCompartment, setEditCompartment] = useState(1)
   const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Apply the "Green blobs" background to the page area that holds this component.
@@ -160,36 +178,58 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
   }
 
   function closeModal() {
+    if (busy) return
     setSelectedId(null)
     setModalMode(null)
+    setError('')
   }
 
-  function saveEdit() {
-    if (!selectedMeal || !canSave) return
+  async function saveEdit() {
+    if (!selectedMeal || !canSave || busy) return
 
-    setMeals(previous =>
-      previous.map(meal =>
-        meal.id === selectedMeal.id
-          ? {
-              ...meal,
-              food: editFood.trim(),
-              date: editDate,
-              compartment: editCompartment,
-            }
-          : meal
-      )
-    )
+    setBusy(true)
+    setError('')
 
-    setMessage('Meal updated in demo history.')
-    closeModal()
+    try {
+      await onUpdate(selectedMeal.id, {
+        food: editFood.trim(),
+        date: editDate,
+        compartment: editCompartment,
+      })
+      setMessage('Meal updated.')
+      setSelectedId(null)
+      setModalMode(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to update this meal.')
+    } finally {
+      setBusy(false)
+    }
   }
 
-  function deleteMeal() {
-    if (selectedId === null) return
-    setMeals(previous => previous.filter(meal => meal.id !== selectedId))
-    setMessage('Meal deleted from demo history.')
-    closeModal()
+  async function deleteMeal() {
+    if (selectedId === null || busy) return
+
+    setBusy(true)
+    setError('')
+
+    try {
+      await onDelete(selectedId)
+      setMessage('Meal deleted.')
+      setSelectedId(null)
+      setModalMode(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to delete this meal.')
+    } finally {
+      setBusy(false)
+    }
   }
+
+  // Hide the toast after a few seconds
+  useEffect(() => {
+    if (!message) return
+    const timer = window.setTimeout(() => setMessage(''), 3500)
+    return () => window.clearTimeout(timer)
+  }, [message])
 
   return (
     <motion.div
@@ -1054,8 +1094,12 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
           {visibleMeals.length === 0 ? (
             <div className="mh-empty">
               <UtensilsCrossed size={34} />
-              <h4 className="serif">No meals found</h4>
-              <p>Try changing your search or date filter.</p>
+              <h4 className="serif">{meals.length === 0 ? 'No meals yet' : 'No meals found'}</h4>
+              <p>
+                {meals.length === 0
+                  ? 'Fill your lunchbox in Smart Lunchbox, then tap “Save to Meal History”.'
+                  : 'Try changing your search or date filter.'}
+              </p>
             </div>
           ) : (
             <div className="mh-rows">
@@ -1186,7 +1230,7 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
               <div className="mh-hero-side">
                 <p>
                   <strong className="num">{format(calorieShare)}%</strong>
-                  of a {format(REFERENCE.calories)} kcal daily reference
+                  of your {format(REFERENCE.calories)} kcal daily target
                 </p>
                 <p className="mh-hero-records">
                   <strong className="num">{visibleMeals.length}</strong>
@@ -1199,7 +1243,7 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
           <div className="mh-card">
             <p className="mh-card-title">
               Nutrients
-              <span>vs. daily reference</span>
+              <span>vs. your daily limits</span>
             </p>
 
             {[
@@ -1305,7 +1349,7 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
 
           <p className="mh-note">
             <Info size={13} />
-            Preview data only. Device records and database storage will be connected later.
+            Saved to your account. Nutrition is estimated from each food's values per 100 g and the measured weight.
           </p>
         </aside>
       </div>
@@ -1375,14 +1419,15 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
                     </div>
                   </div>
                   <p className="mh-delete-copy">
-                    Are you sure you want to delete <strong>{selectedMeal.food}</strong> from your demo meal history?
+                    Are you sure you want to delete <strong>{selectedMeal.food}</strong> from your meal history?
                   </p>
-                  <p className="mh-hint">This action cannot be undone within this session.</p>
+                  <p className="mh-hint">This action cannot be undone.</p>
+                  {error && <p className="mh-hint" role="alert" style={{ color: 'var(--mh-del-text)' }}>{error}</p>}
                   <div className="mh-btns">
-                    <button type="button" className="mh-btn" onClick={closeModal}>Cancel</button>
-                    <button type="button" className="mh-btn danger" onClick={deleteMeal}>
+                    <button type="button" className="mh-btn" onClick={closeModal} disabled={busy}>Cancel</button>
+                    <button type="button" className="mh-btn danger" onClick={deleteMeal} disabled={busy}>
                       <Trash2 size={15} />
-                      Delete
+                      {busy ? 'Deleting…' : 'Delete'}
                     </button>
                   </div>
                 </>
@@ -1427,14 +1472,15 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
                   </div>
 
                   <p className="mh-hint">
-                    Weight and nutrition values remain unchanged. Actual weight will come from the sensor later.
+                    Weight and nutrition stay as recorded. The time of the meal is kept; only the date changes.
                   </p>
+                  {error && <p className="mh-hint" role="alert" style={{ color: 'var(--mh-del-text)' }}>{error}</p>}
 
                   <div className="mh-btns">
-                    <button type="button" className="mh-btn" onClick={closeModal}>Cancel</button>
-                    <button type="button" className="mh-btn primary" onClick={saveEdit} disabled={!canSave}>
+                    <button type="button" className="mh-btn" onClick={closeModal} disabled={busy}>Cancel</button>
+                    <button type="button" className="mh-btn primary" onClick={saveEdit} disabled={!canSave || busy}>
                       <Check size={15} />
-                      Save Changes
+                      {busy ? 'Saving…' : 'Save Changes'}
                     </button>
                   </div>
                 </>
@@ -1456,7 +1502,7 @@ export default function MealHistory({ meals, setMeals }: MealHistoryProps) {
                       <strong className="num">{format(selectedNutrition.calories)}<small>kcal</small></strong>
                     </div>
                     <div className="mh-tile">
-                      <span><Scale size={13} />Measured Weight (Demo)</span>
+                      <span><Scale size={13} />Measured Weight</span>
                       <strong className="num">{selectedMeal.weight}<small>g</small></strong>
                     </div>
                     <div className="mh-tile">

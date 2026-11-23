@@ -8,6 +8,7 @@ import {
   Info,
   Plus,
   RefreshCcw,
+  Save,
   Scale,
   Search,
   UtensilsCrossed,
@@ -46,10 +47,26 @@ type NutritionTotals = Nutrition & {
   weight: number
 }
 
+// A meal ready to be saved to Meal History (matches Meal without id/date/time)
+export type LunchboxMeal = {
+  food: string
+  emoji: string
+  compartment: number
+  weight: number
+  caloriesPer100g: number
+  sugarPer100g: number
+  sodiumPer100g: number
+}
+
 type SmartLunchboxProps = {
   deviceOnline: boolean
   liveWeight: number | null
   sensorReady: boolean
+  /** Saves the filled compartments to Meal History (database). */
+  onSaveMeals?: (items: LunchboxMeal[]) => Promise<void>
+  calorieGoal?: number
+  sugarGoal?: number
+  sodiumGoal?: number
 }
 
 // ============================================
@@ -305,7 +322,19 @@ export default function SmartLunchbox({
   deviceOnline,
   liveWeight,
   sensorReady,
+  onSaveMeals,
+  calorieGoal,
+  sugarGoal,
+  sodiumGoal,
 }: SmartLunchboxProps) {
+  // Personal daily targets (fallback: general reference)
+  const reference = {
+    calories: calorieGoal || DAILY_REFERENCE.calories,
+    sugar: sugarGoal || DAILY_REFERENCE.sugar,
+    sodium: sodiumGoal || DAILY_REFERENCE.sodium,
+  }
+
+  const [savingMeal, setSavingMeal] = useState(false)
 
   // ==========================================
   // STATE
@@ -417,15 +446,15 @@ export default function SmartLunchbox({
 
   const caloriePercent = percentOf(
     totals.calories,
-    DAILY_REFERENCE.calories
+    reference.calories
   )
   const sugarPercent = percentOf(
     totals.sugar,
-    DAILY_REFERENCE.sugar
+    reference.sugar
   )
   const sodiumPercent = percentOf(
     totals.sodium,
-    DAILY_REFERENCE.sodium
+    reference.sodium
   )
 
   const selected =
@@ -578,6 +607,43 @@ export default function SmartLunchbox({
   const clearAll = (): void => {
     setCompartments(emptyCompartments())
     setNotification('Lunchbox cleared.')
+  }
+
+  // Records everything in the lunchbox as one meal, then empties it.
+  const saveToHistory = async (): Promise<void> => {
+    if (!onSaveMeals || savingMeal) return
+
+    const items: LunchboxMeal[] = compartments
+      .filter((item) => item.food !== null && item.weight > 0)
+      .map((item) => ({
+        food: item.food!.name,
+        emoji: item.food!.emoji,
+        compartment: item.id,
+        weight: item.weight,
+        caloriesPer100g: item.food!.calories,
+        sugarPer100g: item.food!.sugar,
+        sodiumPer100g: item.food!.sodium,
+      }))
+
+    if (items.length === 0) return
+
+    setSavingMeal(true)
+
+    try {
+      await onSaveMeals(items)
+      setCompartments(emptyCompartments())
+      setNotification(
+        `Saved ${items.length} ${items.length === 1 ? 'food' : 'foods'} to Meal History.`
+      )
+    } catch (error) {
+      setNotification(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save this meal. Check XAMPP.'
+      )
+    } finally {
+      setSavingMeal(false)
+    }
   }
 
   // ==========================================
@@ -2386,6 +2452,43 @@ export default function SmartLunchbox({
           border-style: solid;
         }
 
+        .smart-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+
+        .smart-save-meal {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 9px 16px;
+          border: 0;
+          border-radius: 99px;
+          background: var(--sb-green);
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 6px 16px rgba(55, 107, 80, 0.2);
+          transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        [data-theme="dark"] .smart-save-meal {
+          color: #173c2a;
+        }
+
+        .smart-save-meal:hover:not(:disabled) {
+          transform: translateY(-1px);
+        }
+
+        .smart-save-meal:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+
         .smart-filled-pill {
           flex-shrink: 0;
           padding: 8px 14px;
@@ -3090,9 +3193,28 @@ export default function SmartLunchbox({
 
         {/* COMPARTMENT COUNT */}
 
-        <span className="smart-filled-pill">
-          {filledCount} / 3 filled
-        </span>
+        <div className="smart-header-actions">
+          <span className="smart-filled-pill">
+            {filledCount} / 3 filled
+          </span>
+
+          {onSaveMeals && (
+            <button
+              type="button"
+              className="smart-save-meal"
+              onClick={saveToHistory}
+              disabled={filledCount === 0 || savingMeal}
+              title={
+                filledCount === 0
+                  ? 'Add food to a compartment first'
+                  : 'Record this lunchbox as a meal'
+              }
+            >
+              <Save size={15} />
+              {savingMeal ? 'Saving…' : 'Save to Meal History'}
+            </button>
+          )}
+        </div>
       </motion.header>
 
       {/* ====================================
@@ -3416,7 +3538,7 @@ export default function SmartLunchbox({
                 {formatNumber(animatedWeight, 1)} g of food ·{' '}
                 {filledCount} / 3 filled ·{' '}
                 {formatNumber(caloriePercent)}% of{' '}
-                {formatNumber(DAILY_REFERENCE.calories)} kcal
+                {formatNumber(reference.calories)} kcal
               </p>
             </div>
           </motion.section>
@@ -3433,7 +3555,7 @@ export default function SmartLunchbox({
               value: formatNumber(animatedSugar, 1),
               unit: 'g',
               percent: sugarPercent,
-              reference: `${DAILY_REFERENCE.sugar} g`,
+              reference: `${reference.sugar} g`,
               delay: 0.2,
             },
             {
@@ -3443,7 +3565,7 @@ export default function SmartLunchbox({
               value: formatNumber(animatedSodium),
               unit: 'mg',
               percent: sodiumPercent,
-              reference: `${formatNumber(DAILY_REFERENCE.sodium)} mg`,
+              reference: `${formatNumber(reference.sodium)} mg`,
               delay: 0.26,
             },
           ].map((item) => (

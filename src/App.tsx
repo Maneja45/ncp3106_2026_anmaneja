@@ -32,12 +32,28 @@ import {
 } from './types/profile'
 
 import {
-  sampleMeals,
   type Meal,
+  nutrition,
 } from './types/meals'
 
+import {
+  deleteMeal,
+  fetchMeals,
+  saveMeals,
+  updateMeal,
+  SessionExpiredError,
+} from './services/meals'
+
+import type { LunchboxMeal } from './SmartLunchbox'
+
 import { API_BASE_URL } from './services/api'
-import { NUTRITION_REFERENCE } from './services/nutrition'
+import {
+  NUTRITION_REFERENCE,
+  isValidInput,
+  personalTargets,
+  type ActivityLevel,
+  type Sex,
+} from './services/nutrition'
 
 import './App.css'
 
@@ -104,6 +120,47 @@ type LoginResponse = {
     age?: number | null
     height?: number | null
     weight?: number | null
+    sex?: string | null
+    activity_level?: string | null
+  }
+}
+
+// Daily targets from the account's age, weight, height, sex and activity
+// (FAO/WHO/UNU energy + WHO sugar and sodium limits).
+// Older accounts without sex use the general 2,000 kcal / 50 g / 2,000 mg reference.
+type TargetSource = {
+  age?: number | string | null
+  height?: number | string | null
+  weight?: number | string | null
+  sex?: string | null
+  activity_level?: string | null
+} | null | undefined
+
+function targetsFor(
+  user: TargetSource
+): Pick<ProfileData, 'calories' | 'sugar' | 'sodium'> {
+  const input = {
+    age: Number(user?.age),
+    height: Number(user?.height),
+    weight: Number(user?.weight),
+    sex: (user?.sex ?? undefined) as Sex | undefined,
+    activity: (user?.activity_level ?? 'sedentary') as ActivityLevel,
+  }
+
+  if (!isValidInput(input)) {
+    return {
+      calories: String(NUTRITION_REFERENCE.calories),
+      sugar: String(NUTRITION_REFERENCE.sugar),
+      sodium: String(NUTRITION_REFERENCE.sodium),
+    }
+  }
+
+  const targets = personalTargets(input)
+
+  return {
+    calories: String(targets.calories),
+    sugar: String(targets.sugar),
+    sodium: String(targets.sodium),
   }
 }
 
@@ -120,12 +177,6 @@ const dashboardPages: DashboardPage[] = [
   'About Us',
   'Settings',
 ]
-
-const PREVIEW_NUTRITION = {
-  calories: 1250,
-  sugar: 28,
-  sodium: 1400,
-}
 
 // ============================================
 // PROFILE STORAGE
@@ -262,7 +313,7 @@ function App() {
   // ==========================================
 
   const [meals, setMeals] =
-    useState<Meal[]>(sampleMeals)
+    useState<Meal[]>([])
 
   // ==========================================
   // USER PROFILE
@@ -700,6 +751,98 @@ function App() {
     Number(profile.sodium) || NUTRITION_REFERENCE.sodium
 
   // ==========================================
+  // MEALS (saved in MySQL through meals.php)
+  // ==========================================
+
+  // Session ended on the server → back to the login page
+  const handleMealError = (error: unknown): never => {
+    if (error instanceof SessionExpiredError) {
+      setIsLoggedIn(false)
+      setAuthPage('login')
+      setLoginError(error.message)
+    }
+    throw error instanceof Error
+      ? error
+      : new Error('Something went wrong with your meals.')
+  }
+
+  // Load this account's meals after signing in
+  useEffect(() => {
+    if (!isLoggedIn) return
+
+    let cancelled = false
+
+    fetchMeals()
+      .then((list) => {
+        if (!cancelled) setMeals(list)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        if (error instanceof SessionExpiredError) {
+          setIsLoggedIn(false)
+          setAuthPage('login')
+          setLoginError(error.message)
+        } else {
+          console.error(error)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isLoggedIn])
+
+  const handleSaveMeals = async (
+    items: LunchboxMeal[]
+  ): Promise<void> => {
+    try {
+      const saved = await saveMeals(items)
+      setMeals((previous) => [...saved, ...previous])
+    } catch (error) {
+      handleMealError(error)
+    }
+  }
+
+  const handleUpdateMeal = async (
+    id: number,
+    changes: { food: string; date: string; compartment: number }
+  ): Promise<void> => {
+    try {
+      const updated = await updateMeal(id, changes)
+      setMeals((previous) =>
+        previous.map((meal) => (meal.id === id ? updated : meal))
+      )
+    } catch (error) {
+      handleMealError(error)
+    }
+  }
+
+  const handleDeleteMeal = async (id: number): Promise<void> => {
+    try {
+      await deleteMeal(id)
+      setMeals((previous) => previous.filter((meal) => meal.id !== id))
+    } catch (error) {
+      handleMealError(error)
+    }
+  }
+
+  // Today's totals (for notifications)
+  const todayKey = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+  const todayTotals = meals
+    .filter((meal) => meal.date === todayKey)
+    .reduce(
+      (sum, meal) => {
+        const value = nutrition(meal)
+        return {
+          calories: sum.calories + value.calories,
+          sugar: sum.sugar + value.sugar,
+          sodium: sum.sodium + value.sodium,
+        }
+      },
+      { calories: 0, sugar: 0, sodium: 0 }
+    )
+
+  // ==========================================
   // THEME
   // ==========================================
 
@@ -791,9 +934,11 @@ function App() {
           loggedInUser?.weight != null
             ? String(loggedInUser.weight)
             : initialProfile.weight,
+
+        ...targetsFor(loggedInUser),
       })
 
-      setMeals(sampleMeals)
+      setMeals([])
 
       setEsp32(INITIAL_ESP32_STATE)
 
@@ -869,8 +1014,9 @@ function App() {
         age: user.age != null ? String(user.age) : '',
         height: user.height != null ? String(user.height) : '',
         weight: user.weight != null ? String(user.weight) : '',
+        ...targetsFor(user),
       })
-      setMeals(sampleMeals)
+      setMeals([])
       setEsp32(INITIAL_ESP32_STATE)
       setActivePage('Smart Lunchbox')
       setShowOpening(true)
@@ -898,6 +1044,8 @@ function App() {
     age: number | null
     height: number | null
     weight: number | null
+    sex?: string | null
+    activity_level?: string | null
   }): void => {
     if (!user.user_id || !user.email) return
     try {
@@ -912,8 +1060,9 @@ function App() {
       age: user.age != null ? String(user.age) : '',
       height: user.height != null ? String(user.height) : '',
       weight: user.weight != null ? String(user.weight) : '',
+      ...targetsFor(user),
     })
-    setMeals(sampleMeals)
+    setMeals([])
     setEsp32(INITIAL_ESP32_STATE)
     setActivePage('Smart Lunchbox')
     setPendingGoogleCredential(null)
@@ -953,14 +1102,23 @@ function App() {
     setAuthPage('recovery-verify')
   }
 
+  // One-time token from verify_reset_code.php
+  const [resetToken, setResetToken] =
+    useState<string>('')
+
   const handleRecoveryVerified =
-    (): void => {
+    (token: string): void => {
+      setResetToken(token)
       setAuthPage('reset-password')
     }
 
   const handleResetComplete =
     (): void => {
-      setPendingEmail('')
+      setResetToken('')
+      setLoginError('')
+      setRegisteredMessage(
+        'Your password has been changed. Please sign in with your new password.'
+      )
       setAuthPage('login')
     }
 
@@ -1277,13 +1435,18 @@ function App() {
               }}
             >
               <ResetPassword
+                email={pendingEmail}
+
+                token={resetToken}
+
                 onComplete={
                   handleResetComplete
                 }
 
-                onBack={() =>
-                  setAuthPage('recovery-verify')
-                }
+                onBack={() => {
+                  setResetToken('')
+                  setAuthPage('forgot-password')
+                }}
               />
             </motion.div>
           )}
@@ -2414,7 +2577,7 @@ function App() {
             <NotificationBell
 
               caloriesConsumed={
-                PREVIEW_NUTRITION.calories
+                Math.round(todayTotals.calories)
               }
 
               caloriesGoal={
@@ -2422,7 +2585,7 @@ function App() {
               }
 
               sugarConsumed={
-                PREVIEW_NUTRITION.sugar
+                Math.round(todayTotals.sugar * 10) / 10
               }
 
               sugarGoal={
@@ -2430,7 +2593,7 @@ function App() {
               }
 
               sodiumConsumed={
-                PREVIEW_NUTRITION.sodium
+                Math.round(todayTotals.sodium)
               }
 
               sodiumGoal={
@@ -2519,6 +2682,14 @@ function App() {
 
               sensorReady={esp32.ready}
 
+              onSaveMeals={handleSaveMeals}
+
+              calorieGoal={calorieGoal}
+
+              sugarGoal={sugarGoal}
+
+              sodiumGoal={sodiumGoal}
+
             />
 
           )}
@@ -2533,7 +2704,15 @@ function App() {
 
               meals={meals}
 
-              setMeals={setMeals}
+              onUpdate={handleUpdateMeal}
+
+              onDelete={handleDeleteMeal}
+
+              calorieGoal={calorieGoal}
+
+              sugarGoal={sugarGoal}
+
+              sodiumGoal={sodiumGoal}
 
             />
 
@@ -2545,7 +2724,12 @@ function App() {
 
           {activePage === 'Meal Planner' && (
 
-            <MealPlanner />
+            <MealPlanner
+              userKey={profile.email}
+              calorieGoal={calorieGoal}
+              sugarGoal={sugarGoal}
+              sodiumGoal={sodiumGoal}
+            />
 
           )}
 
@@ -2565,7 +2749,12 @@ function App() {
 
           {activePage === 'Nutrition Reports' && (
 
-            <NutritionReports />
+            <NutritionReports
+              meals={meals}
+              calorieGoal={calorieGoal}
+              sugarGoal={sugarGoal}
+              sodiumGoal={sodiumGoal}
+            />
 
           )}
 

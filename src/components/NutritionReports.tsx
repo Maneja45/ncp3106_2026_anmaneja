@@ -16,6 +16,7 @@ import {
   NUTRITION_REFERENCE,
   NUTRITION_SOURCE,
 } from '../services/nutrition'
+import { type Meal, nutrition } from '../types/meals'
 
 type Nutrient = 'calories' | 'sugar' | 'sodium'
 type Period = '7 Days' | '30 Days'
@@ -26,26 +27,50 @@ type DayRecord = {
   calories: number
   sugar: number
   sodium: number
+  /** true when at least one meal was saved that day */
+  logged: boolean
 }
 
-// Demonstration data (replace with real records later)
-const sampleData: DayRecord[] = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date(2026, 10, 7)
-  date.setDate(date.getDate() - (29 - i))
+type Goals = { calories: number; sugar: number; sodium: number }
 
-  return {
-    date: [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, '0'),
-      String(date.getDate()).padStart(2, '0'),
-    ].join('-'),
-    calories: 1450 + ((i * 137 + 71) % 750),
-    sugar: 19 + ((i * 11 + 5) % 36),
-    sodium: 1100 + ((i * 179 + 83) % 1300),
+const dateKey = (date: Date) =>
+  [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+
+// One record per day (oldest → today), totals from the saved meals.
+function buildDays(meals: Meal[], days: number): DayRecord[] {
+  const totals = new Map<string, DayRecord>()
+
+  for (const meal of meals) {
+    const value = nutrition(meal)
+    const day = totals.get(meal.date) ?? {
+      date: meal.date,
+      calories: 0,
+      sugar: 0,
+      sodium: 0,
+      logged: true,
+    }
+    day.calories += value.calories
+    day.sugar += value.sugar
+    day.sodium += value.sodium
+    totals.set(meal.date, day)
   }
-})
 
-const nutrientConfig: Record<
+  const today = new Date()
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    date.setDate(date.getDate() - (days - 1 - index))
+    const key = dateKey(date)
+
+    return totals.get(key) ?? { date: key, calories: 0, sugar: 0, sodium: 0, logged: false }
+  })
+}
+
+const buildConfig = (goals: Goals): Record<
   Nutrient,
   {
     title: string
@@ -56,11 +81,11 @@ const nutrientConfig: Record<
     icon: LucideIcon
     source: string
   }
-> = {
+> => ({
   calories: {
     title: 'Calories',
     unit: 'kcal',
-    reference: NUTRITION_REFERENCE.calories,
+    reference: goals.calories,
     isLimit: false,
     icon: Flame,
     source: NUTRITION_SOURCE.calories,
@@ -68,7 +93,7 @@ const nutrientConfig: Record<
   sugar: {
     title: 'Sugar',
     unit: 'g',
-    reference: NUTRITION_REFERENCE.sugar,
+    reference: goals.sugar,
     isLimit: true,
     icon: Candy,
     source: NUTRITION_SOURCE.sugar,
@@ -76,12 +101,12 @@ const nutrientConfig: Record<
   sodium: {
     title: 'Sodium',
     unit: 'mg',
-    reference: NUTRITION_REFERENCE.sodium,
+    reference: goals.sodium,
     isLimit: true,
     icon: Droplets,
     source: NUTRITION_SOURCE.sodium,
   },
-}
+})
 
 const nutrients: Nutrient[] = ['calories', 'sugar', 'sodium']
 
@@ -117,24 +142,50 @@ function fullDate(date: string) {
   })
 }
 
-export default function NutritionReports() {
+type NutritionReportsProps = {
+  meals: Meal[]
+  calorieGoal?: number
+  sugarGoal?: number
+  sodiumGoal?: number
+}
+
+export default function NutritionReports({
+  meals,
+  calorieGoal,
+  sugarGoal,
+  sodiumGoal,
+}: NutritionReportsProps) {
   const [period, setPeriod] = useState<Period>('7 Days')
   const [nutrient, setNutrient] = useState<Nutrient>('calories')
   const [hovered, setHovered] = useState<number | null>(null)
 
-  const data = useMemo(
-    () => sampleData.slice(period === '7 Days' ? -7 : -30),
-    [period]
+  const nutrientConfig = useMemo(
+    () =>
+      buildConfig({
+        calories: calorieGoal || NUTRITION_REFERENCE.calories,
+        sugar: sugarGoal || NUTRITION_REFERENCE.sugar,
+        sodium: sodiumGoal || NUTRITION_REFERENCE.sodium,
+      }),
+    [calorieGoal, sugarGoal, sodiumGoal]
   )
 
-  const averages = useMemo(
-    () => ({
-      calories: data.reduce((sum, day) => sum + day.calories, 0) / data.length,
-      sugar: data.reduce((sum, day) => sum + day.sugar, 0) / data.length,
-      sodium: data.reduce((sum, day) => sum + day.sodium, 0) / data.length,
-    }),
-    [data]
+  const data = useMemo(
+    () => buildDays(meals, period === '7 Days' ? 7 : 30),
+    [meals, period]
   )
+
+  // Averages and highlights use only days with saved meals
+  const loggedDays = useMemo(() => data.filter(day => day.logged), [data])
+  const hasData = loggedDays.length > 0
+
+  const averages = useMemo(() => {
+    const count = Math.max(1, loggedDays.length)
+    return {
+      calories: loggedDays.reduce((sum, day) => sum + day.calories, 0) / count,
+      sugar: loggedDays.reduce((sum, day) => sum + day.sugar, 0) / count,
+      sodium: loggedDays.reduce((sum, day) => sum + day.sodium, 0) / count,
+    }
+  }, [loggedDays])
 
   const current = nutrientConfig[nutrient]
 
@@ -146,17 +197,22 @@ export default function NutritionReports() {
   const referenceBottom = (current.reference / maxValue) * 100
 
   // Highest and lowest day for the nutrient shown in the chart
-  const highestDay = data.reduce((best, day) =>
-    day[nutrient] > best[nutrient] ? day : best
-  )
-  const lowestDay = data.reduce((best, day) =>
-    day[nutrient] < best[nutrient] ? day : best
-  )
+  const highestDay = hasData
+    ? loggedDays.reduce((best, day) => (day[nutrient] > best[nutrient] ? day : best))
+    : null
+  const lowestDay = hasData
+    ? loggedDays.reduce((best, day) => (day[nutrient] < best[nutrient] ? day : best))
+    : null
 
   const exportCSV = () => {
     const rows = [
       ['Date', 'Calories (kcal)', 'Sugar (g)', 'Sodium (mg)'],
-      ...data.map(day => [day.date, day.calories, day.sugar, day.sodium]),
+      ...data.map(day => [
+        day.date,
+        Math.round(day.calories),
+        Math.round(day.sugar * 10) / 10,
+        Math.round(day.sodium),
+      ]),
     ]
 
     const csv = rows.map(row => row.join(',')).join('\r\n')
@@ -1109,7 +1165,7 @@ export default function NutritionReports() {
                 const difference = Math.abs(average - config.reference)
                 const above = average > config.reference
                 const status = statusOf(average, config.reference)
-                const daysWithin = data.filter(
+                const daysWithin = loggedDays.filter(
                   day => day[key] <= config.reference
                 ).length
 
@@ -1128,17 +1184,23 @@ export default function NutritionReports() {
                     </div>
 
                     <p className="nr-num">
-                      Average is <b>{formatNumber(difference)} {config.unit}</b>{' '}
-                      {above ? 'above' : 'below'} the{' '}
-                      {config.isLimit ? 'limit' : 'reference'}.
-                      {config.isLimit && (
+                      {hasData ? (
                         <>
-                          {' '}
-                          <b>
-                            {daysWithin} of {data.length}
-                          </b>{' '}
-                          days stayed within it.
+                          Average is <b>{formatNumber(difference)} {config.unit}</b>{' '}
+                          {above ? 'above' : 'below'} the{' '}
+                          {config.isLimit ? 'limit' : 'target'}.
+                          {config.isLimit && (
+                            <>
+                              {' '}
+                              <b>
+                                {daysWithin} of {loggedDays.length}
+                              </b>{' '}
+                              logged {loggedDays.length === 1 ? 'day' : 'days'} stayed within it.
+                            </>
+                          )}
                         </>
+                      ) : (
+                        <>No meals saved in this period yet.</>
                       )}
                     </p>
 
@@ -1148,10 +1210,9 @@ export default function NutritionReports() {
                           <i
                             key={day.date}
                             style={{
-                              background: `var(--nr-${statusOf(
-                                day[key],
-                                config.reference
-                              )})`,
+                              background: day.logged
+                                ? `var(--nr-${statusOf(day[key], config.reference)})`
+                                : 'var(--nr-track)',
                             }}
                           />
                         ))}
@@ -1172,7 +1233,7 @@ export default function NutritionReports() {
                     { label: 'Highest day', day: highestDay },
                     { label: 'Lowest day', day: lowestDay },
                   ].map(item => {
-                    const value = item.day[nutrient]
+                    const value = item.day ? item.day[nutrient] : 0
                     const status = statusOf(value, current.reference)
 
                     return (
@@ -1192,10 +1253,12 @@ export default function NutritionReports() {
                         >
                           <span>{item.label}</span>
                           <strong className="nr-num">
-                            {formatNumber(value)}
-                            <small>{current.unit}</small>
+                            {item.day ? formatNumber(value) : '—'}
+                            {item.day && <small>{current.unit}</small>}
                           </strong>
-                          <em className="nr-num">{fullDate(item.day.date)}</em>
+                          <em className="nr-num">
+                            {item.day ? fullDate(item.day.date) : 'No meals yet'}
+                          </em>
                         </motion.div>
                       </AnimatePresence>
                     )
@@ -1210,12 +1273,13 @@ export default function NutritionReports() {
                 About these numbers
               </strong>
               <span>
-                Sodium uses the WHO limit of under 2,000 mg per day. Sugar and
-                calories are general references; personal needs vary.
+                Your targets come from your age, weight, sex and activity
+                (FAO/WHO/UNU energy needs). Sugar stays under 10% of calories
+                and sodium under 2,000 mg (WHO).
               </span>
               <span>
-                Sample data preview — not your actual food intake or lunchbox
-                readings yet.
+                Built from the meals you saved. Averages count only days with
+                at least one saved meal.
               </span>
             </section>
           </motion.aside>

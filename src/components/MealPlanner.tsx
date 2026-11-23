@@ -170,16 +170,67 @@ function useCountUp(value: number, duration = 650): number {
 const today = new Date()
 const initialDate = dateKey(today)
 
-const initialMeals: PlannedMeal[] = [
-  { id: 1, date: initialDate, mealType: 'Breakfast', food: foods[8], portion: 1 },
-  { id: 2, date: initialDate, mealType: 'Lunch', food: foods[0], portion: 1 },
-  { id: 3, date: initialDate, mealType: 'Lunch', food: foods[2], portion: 1 },
-  { id: 4, date: initialDate, mealType: 'Lunch', food: foods[5], portion: 1 },
-]
+// Plans are saved in this browser, separately for each account.
+const planKey = (userKey: string) =>
+  `sustansyabox_meal_plan_${userKey.trim().toLowerCase() || 'guest'}`
 
-export default function MealPlanner() {
+function loadPlan(userKey: string): PlannedMeal[] {
+  try {
+    const stored = localStorage.getItem(planKey(userKey))
+    const parsed: unknown = stored ? JSON.parse(stored) : []
+    if (!Array.isArray(parsed)) return []
+
+    // Re-link each saved item to the current food catalog
+    return parsed.flatMap((item): PlannedMeal[] => {
+      const food = foods.find(entry => entry.id === item?.food?.id)
+      return food &&
+        typeof item.id === 'number' &&
+        typeof item.date === 'string' &&
+        mealTypes.includes(item.mealType) &&
+        typeof item.portion === 'number'
+        ? [{ id: item.id, date: item.date, mealType: item.mealType, food, portion: item.portion }]
+        : []
+    })
+  } catch {
+    return []
+  }
+}
+
+type MealPlannerProps = {
+  /** Usually the user's email — keeps each account's plan separate. */
+  userKey?: string
+  calorieGoal?: number
+  sugarGoal?: number
+  sodiumGoal?: number
+}
+
+export default function MealPlanner({
+  userKey = '',
+  calorieGoal,
+  sugarGoal,
+  sodiumGoal,
+}: MealPlannerProps) {
+  // Personal daily targets (fallback: general reference)
+  const reference = {
+    calories: calorieGoal || DAILY_REFERENCE.calories,
+    sugar: sugarGoal || DAILY_REFERENCE.sugar,
+    sodium: sodiumGoal || DAILY_REFERENCE.sodium,
+  }
+
   const [selectedDate, setSelectedDate] = useState(initialDate)
-  const [plannedMeals, setPlannedMeals] = useState<PlannedMeal[]>(initialMeals)
+  const [plannedMeals, setPlannedMeals] = useState<PlannedMeal[]>(() => loadPlan(userKey))
+
+  useEffect(() => {
+    setPlannedMeals(loadPlan(userKey))
+  }, [userKey])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(planKey(userKey), JSON.stringify(plannedMeals))
+    } catch {
+      // Browser storage may be unavailable.
+    }
+  }, [plannedMeals, userKey])
 
   const [showFoodModal, setShowFoodModal] = useState(false)
   const [selectedMealType, setSelectedMealType] = useState<MealType>('Lunch')
@@ -188,7 +239,7 @@ export default function MealPlanner() {
   const [notification, setNotification] = useState('')
   const [undoMeal, setUndoMeal] = useState<PlannedMeal | null>(null)
 
-  const [recentIds, setRecentIds] = useState<number[]>([9, 1, 3, 6])
+  const [recentIds, setRecentIds] = useState<number[]>([])
 
   const [copyOpen, setCopyOpen] = useState(false)
   const [copyTargets, setCopyTargets] = useState<string[]>([])
@@ -265,9 +316,9 @@ export default function MealPlanner() {
   const animatedSugar = useCountUp(totals.sugar)
   const animatedSodium = useCountUp(totals.sodium)
 
-  const caloriePercent = percentOf(totals.calories, DAILY_REFERENCE.calories)
-  const sugarPercent = percentOf(totals.sugar, DAILY_REFERENCE.sugar)
-  const sodiumPercent = percentOf(totals.sodium, DAILY_REFERENCE.sodium)
+  const caloriePercent = percentOf(totals.calories, reference.calories)
+  const sugarPercent = percentOf(totals.sugar, reference.sugar)
+  const sodiumPercent = percentOf(totals.sodium, reference.sodium)
 
   const mealSplit = mealTypes.map(type => {
     const calories = dailyMeals
@@ -1596,7 +1647,7 @@ export default function MealPlanner() {
                   <motion.span
                     initial={false}
                     animate={{
-                      width: `${percentOf(dayCalories, DAILY_REFERENCE.calories)}%`,
+                      width: `${percentOf(dayCalories, reference.calories)}%`,
                     }}
                     transition={{ duration: 0.6 }}
                   />
@@ -1918,7 +1969,7 @@ export default function MealPlanner() {
 
                   <p className="mp-meta mp-num">
                     {formatNumber(caloriePercent)}% of{' '}
-                    {formatNumber(DAILY_REFERENCE.calories)} kcal ·{' '}
+                    {formatNumber(reference.calories)} kcal ·{' '}
                     {dailyMeals.length} {dailyMeals.length === 1 ? 'food' : 'foods'}
                   </p>
                 </div>
@@ -1932,7 +1983,7 @@ export default function MealPlanner() {
                   value: formatNumber(animatedSugar, 1),
                   unit: 'g',
                   percent: sugarPercent,
-                  reference: `${DAILY_REFERENCE.sugar} g`,
+                  reference: `${reference.sugar} g`,
                 },
                 {
                   key: 'sodium',
@@ -1941,7 +1992,7 @@ export default function MealPlanner() {
                   value: formatNumber(animatedSodium),
                   unit: 'mg',
                   percent: sodiumPercent,
-                  reference: `${formatNumber(DAILY_REFERENCE.sodium)} mg`,
+                  reference: `${formatNumber(reference.sodium)} mg`,
                 },
               ].map(item => (
                 <div key={item.key} className={`mp-meter ${levelOf(item.percent)}`}>

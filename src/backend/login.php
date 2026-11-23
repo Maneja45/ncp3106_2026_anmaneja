@@ -28,6 +28,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 }
 
 require_once __DIR__ . "/db.php";
+require_once __DIR__ . "/session.php";
 
 $data = json_decode(file_get_contents("php://input"), true);
 
@@ -58,13 +59,14 @@ if (
 
 try {
     $statement = $pdo->prepare("
-        SELECT user_id, full_name, email, password_hash, age, height, weight
+        SELECT user_id, full_name, email, password_hash, age, height, weight,
+               sex, activity_level
         FROM sustansyabox
         WHERE email = :email
         LIMIT 1
     ");
     $statement->execute([":email" => $email]);
-    $user = $statement->fetch();
+    $user = $statement->fetch(PDO::FETCH_ASSOC);
 
     if (!$user || !password_verify($password, $user["password_hash"])) {
         http_response_code(401);
@@ -76,6 +78,9 @@ try {
     }
 
     unset($user["password_hash"]);
+
+    // Remember who is signed in (used by meals.php)
+    sustansya_login_session((int) $user["user_id"]);
 
     echo json_encode([
         "success" => true,
