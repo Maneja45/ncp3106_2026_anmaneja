@@ -29,3 +29,13 @@ dist-ssr
 !.env.example
 src/backend/vendor/
 mail_config.php
+
+# Android / Capacitor build files (heavy, auto-generated)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/.idea/
+*.apk
+*.aab

@@ -48,6 +48,10 @@ try {
     $pdo->prepare("UPDATE password_resets SET used_at = NOW() WHERE user_id = :user_id AND used_at IS NULL")
         ->execute([":user_id" => $reset["user_id"]]);
 
+    // A new password unlocks the account (clears failed sign-in tries)
+    $pdo->prepare("DELETE FROM login_attempts WHERE email = :email")
+        ->execute([":email" => $email]);
+
     $pdo->commit();
 
     respond(200, ["success" => true, "message" => "Your password has been changed. You can now sign in."]);

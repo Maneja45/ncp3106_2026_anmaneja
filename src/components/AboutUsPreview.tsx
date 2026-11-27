@@ -1,13 +1,17 @@
 import TeamLanyardRail from "../ui/TeamLanyard";
 import type { LanyardMember } from "../ui/TeamLanyard";
 
+// Photos live in  public/team/  (member1.jpg ... member5.jpg).
+// BASE_URL keeps the path working on localhost, on the phone, and on GitHub Pages.
+const photo = (file: string) => `${import.meta.env.BASE_URL}team/${file}`;
+
 const teamMembers: LanyardMember[] = [
   {
     id: "member-1",
     name: "Baldovino, Charlize Mae S.",
     role: "Project Leader / IoT Developer",
     team: "SustansyaBox",
-    image: "/team/member1.jpg",
+    image: photo("member1.jpg"),
     tone: 1,
     drop: 8,
     bio: "Leads the SustansyaBox project and contributes to the development and integration of its IoT hardware.",
@@ -18,7 +22,7 @@ const teamMembers: LanyardMember[] = [
     name: "Calimlim, Shanell E.",
     role: "Creatives / IoT Developer",
     team: "SustansyaBox",
-    image: "/team/member2.jpg",
+    image: photo("member2.jpg"),
     tone: 2,
     drop: 16,
     bio: "Handles creative contributions and collaborates on the development of SustansyaBox's IoT components.",
@@ -29,7 +33,7 @@ const teamMembers: LanyardMember[] = [
     name: "Jance, Kathlyne Anne C.",
     role: "Backend Developer / IoT Developer",
     team: "SustansyaBox",
-    image: "/team/member3.jpg",
+    image: photo("member3.jpg"),
     tone: 3,
     drop: 5,
     bio: "Develops backend functionality and contributes to the integration of the smart lunchbox's IoT system.",
@@ -40,7 +44,7 @@ const teamMembers: LanyardMember[] = [
     name: "Madriaga, Joshua R.",
     role: "Figma Designer / IoT Developer",
     team: "SustansyaBox",
-    image: "/team/member4.jpg",
+    image: photo("member4.jpg"),
     tone: 4,
     drop: 12,
     bio: "Designs the application's interface in Figma and contributes to the development of the IoT hardware.",
@@ -51,7 +55,7 @@ const teamMembers: LanyardMember[] = [
     name: "Maneja, Angela Nicole S.",
     role: "Frontend Developer / IoT Developer",
     team: "SustansyaBox",
-    image: "/team/member5.jpg",
+    image: photo("member5.jpg"),
     tone: 5,
     drop: 10,
     bio: "Develops the interactive frontend interface and contributes to the smart lunchbox's IoT integration.",

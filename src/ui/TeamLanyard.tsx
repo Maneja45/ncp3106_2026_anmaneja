@@ -492,7 +492,7 @@ export function TeamLanyardRail({
       const fitHeight = (window.innerHeight - RESERVED_HEIGHT) / HEIGHT_PER_W;
       const railW = Math.min(MAX_W, Math.max(MIN_RAIL_W, fitHeight), (width - 40) / (n * RAIL_PITCH_MIN + 0.4));
       const carousel = railW < MIN_RAIL_W;
-      const W = Math.round((carousel ? clamp(width * 0.3, 96, 118) : railW) * 4) / 4;
+      const W = Math.round((carousel ? clamp(width * 0.46, 120, 170) : railW) * 4) / 4;
       setSize((old) => (Math.abs(old.width - width) < 0.5 && old.carousel === carousel && old.W === W ? old : { width, W, carousel }));
     };
     measure(stage.clientWidth);

@@ -46,6 +46,12 @@ import {
 
 import type { LunchboxMeal } from './SmartLunchbox'
 
+import {
+  changePassword,
+  logout,
+  updateProfile,
+} from './services/profile'
+
 import { API_BASE_URL } from './services/api'
 import {
   NUTRITION_REFERENCE,
@@ -303,6 +309,31 @@ async function loginWithGoogleBackend(
 }
 
 // ============================================
+// SESSION CHECK (keeps you signed in after a refresh)
+// ============================================
+
+async function fetchSessionUser(): Promise<LoginResponse['user'] | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/me.php`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+
+    if (!(response.headers.get('content-type') ?? '').includes('application/json')) {
+      return null
+    }
+
+    const result = (await response.json()) as LoginResponse
+    return result.success && result.user ? result.user : null
+  } catch {
+    // XAMPP offline → just show the login page
+    return null
+  }
+}
+
+const PAGE_STORAGE_KEY = 'sustansyabox_active_page'
+
+// ============================================
 // MAIN APPLICATION
 // ============================================
 
@@ -328,6 +359,10 @@ function App() {
 
   const [isLoggedIn, setIsLoggedIn] =
     useState<boolean>(false)
+
+  // true while we ask the server if a session already exists
+  const [checkingSession, setCheckingSession] =
+    useState<boolean>(true)
 
   const [authPage, setAuthPage] =
     useState<AuthPage>('login')
@@ -698,9 +733,56 @@ function App() {
   // ==========================================
 
   const [activePage, setActivePage] =
-    useState<DashboardPage>(
-      'Smart Lunchbox'
-    )
+    useState<DashboardPage>(() => {
+      try {
+        const saved = sessionStorage.getItem(PAGE_STORAGE_KEY)
+        if (saved && dashboardPages.includes(saved as DashboardPage)) {
+          return saved as DashboardPage
+        }
+      } catch {
+        // Storage might be disabled.
+      }
+      return 'Smart Lunchbox'
+    })
+
+  // Remember the open page for this tab, so a refresh stays on it
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PAGE_STORAGE_KEY, activePage)
+    } catch {
+      // Storage might be disabled.
+    }
+  }, [activePage])
+
+  // On first load: if the PHP session is still active, sign in silently
+  useEffect(() => {
+    let cancelled = false
+
+    fetchSessionUser().then((user) => {
+      if (cancelled) return
+
+      if (user?.user_id && user.email) {
+        setProfile({
+          ...initialProfile,
+          fullName: user.full_name ?? '',
+          email: user.email,
+          age: user.age != null ? String(user.age) : '',
+          height: user.height != null ? String(user.height) : '',
+          weight: user.weight != null ? String(user.weight) : '',
+          sex: user.sex ?? '',
+          activity: user.activity_level ?? 'sedentary',
+          ...targetsFor(user),
+        })
+        setIsLoggedIn(true)
+      }
+
+      setCheckingSession(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const isDashboard =
     activePage === 'Dashboard'
@@ -730,10 +812,69 @@ function App() {
 
   }, [profile, isLoggedIn])
 
-  const handleSaveProfile = (
+  // Saves to MySQL (update_profile.php), then recomputes the targets
+  const handleSaveProfile = async (
     updatedProfile: ProfileData
-  ): void => {
-    setProfile(updatedProfile)
+  ): Promise<void> => {
+    try {
+      const user = await updateProfile({
+        fullName: updatedProfile.fullName,
+        age: Number(updatedProfile.age),
+        height: Number(updatedProfile.height),
+        weight: Number(updatedProfile.weight),
+        sex: updatedProfile.sex,
+        activityLevel: updatedProfile.activity || 'sedentary',
+      })
+
+      setProfile({
+        ...updatedProfile,
+        fullName: user.full_name,
+        email: user.email,
+        age: user.age != null ? String(user.age) : updatedProfile.age,
+        height: user.height != null ? String(user.height) : updatedProfile.height,
+        weight: user.weight != null ? String(user.weight) : updatedProfile.weight,
+        sex: user.sex ?? '',
+        activity: user.activity_level ?? 'sedentary',
+        ...targetsFor(user),
+      })
+    } catch (error) {
+      handleMealError(error)
+    }
+  }
+
+  const handleChangePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> => {
+    try {
+      await changePassword(currentPassword, newPassword)
+    } catch (error) {
+      handleMealError(error)
+    }
+  }
+
+  const handleSignOut = async (): Promise<void> => {
+    await logout()
+
+    try {
+      localStorage.removeItem(PROFILE_STORAGE_KEY)
+    } catch {
+      // Storage might be disabled.
+    }
+
+    setIsLoggedIn(false)
+    setProfile({ ...initialProfile })
+    setMeals([])
+    setEsp32(INITIAL_ESP32_STATE)
+    setActivePage('Smart Lunchbox')
+    try {
+      sessionStorage.removeItem(PAGE_STORAGE_KEY)
+    } catch {
+      // Storage might be disabled.
+    }
+    setLoginError('')
+    setRegisteredMessage('You have been signed out.')
+    setAuthPage('login')
   }
 
   // ==========================================
@@ -935,6 +1076,10 @@ function App() {
             ? String(loggedInUser.weight)
             : initialProfile.weight,
 
+        sex: loggedInUser?.sex ?? '',
+
+        activity: loggedInUser?.activity_level ?? 'sedentary',
+
         ...targetsFor(loggedInUser),
       })
 
@@ -1014,6 +1159,8 @@ function App() {
         age: user.age != null ? String(user.age) : '',
         height: user.height != null ? String(user.height) : '',
         weight: user.weight != null ? String(user.weight) : '',
+        sex: user.sex ?? '',
+        activity: user.activity_level ?? 'sedentary',
         ...targetsFor(user),
       })
       setMeals([])
@@ -1060,6 +1207,8 @@ function App() {
       age: user.age != null ? String(user.age) : '',
       height: user.height != null ? String(user.height) : '',
       weight: user.weight != null ? String(user.weight) : '',
+      sex: user.sex ?? '',
+      activity: user.activity_level ?? 'sedentary',
       ...targetsFor(user),
     })
     setMeals([])
@@ -1145,6 +1294,42 @@ function App() {
   // ==========================================
   // AUTHENTICATION SCREENS
   // ==========================================
+
+  if (checkingSession) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          minHeight: '100dvh',
+          display: 'grid',
+          placeItems: 'center',
+          background: '#f8faf5',
+          color: '#45634d',
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        <style>{`
+          @keyframes sbSpin { to { transform: rotate(360deg); } }
+          @media (prefers-reduced-motion: reduce) { .sb-spin { animation: none !important; } }
+        `}</style>
+        <div style={{ display: 'grid', justifyItems: 'center', gap: 14 }}>
+          <span
+            className="sb-spin"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: '50%',
+              border: '3px solid #dce6d6',
+              borderTopColor: '#45634d',
+              animation: 'sbSpin 0.8s linear infinite',
+            }}
+          />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Loading SustansyaBox…</span>
+        </div>
+      </div>
+    )
+  }
 
   if (!isLoggedIn) {
     return (
@@ -2307,10 +2492,22 @@ function App() {
             padding: 10px;
           }
 
+          /* Phone: status icons always sit at the top-right corner,
+             the page title goes below them (same on every page). */
           .sb-page-header {
             gap: 8px;
 
-            flex-wrap: wrap;
+            flex-direction: column-reverse;
+            align-items: stretch;
+          }
+
+          .sb-header-actions {
+            justify-content: flex-end;
+          }
+
+          /* Dashboard had extra top space: align it with the other pages */
+          .sb-dashboard-page-header {
+            padding-top: 0;
           }
 
           .sb-page-title {
@@ -2775,15 +2972,11 @@ function App() {
           {activePage === 'Settings' && (
 
             <UserProfile
-
               profile={profile}
-
               onSave={handleSaveProfile}
-
-              onBack={() =>
-                setActivePage('Smart Lunchbox')
-              }
-
+              onChangePassword={handleChangePassword}
+              onSignOut={() => void handleSignOut()}
+              today={todayTotals}
             />
 
           )}

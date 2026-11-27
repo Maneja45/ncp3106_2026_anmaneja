@@ -13,7 +13,7 @@ header("Content-Type: application/json; charset=utf-8");
 
 $origin = $_SERVER["HTTP_ORIGIN"] ?? "";
 
-if (preg_match("/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/", $origin)) {
+if (preg_match("/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/", $origin)) {
     header("Access-Control-Allow-Origin: " . $origin);
     header("Access-Control-Allow-Credentials: true");
     header("Vary: Origin");
