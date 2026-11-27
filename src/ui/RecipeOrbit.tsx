@@ -93,6 +93,30 @@ const css = `
 .ro-dot span { display:block; width:5px; height:5px; border-radius:8px; background:var(--ro-accent-text); opacity:.4; transition:height .3s,opacity .3s; }
 .ro-dot.active span { height:16px; opacity:1; }
 @media (prefers-reduced-motion:reduce) { .ro-track { transition:none; } }
+
+/* ===== PHONE LAYOUT: tall 400 x 930 design, scaled to the screen width ===== */
+.recipe-orbit.ro-compact { height:auto; min-height:0; aspect-ratio:400/930; }
+.ro-compact .ro-stage { width:400px; height:930px; }
+.ro-compact .ro-swoosh { transform-origin:0 0; transform:scale(.55); }
+.ro-compact .ro-kicker { top:16px; left:24px; font-size:10px; }
+.ro-compact .ro-count { top:14px; right:24px; bottom:auto; }
+.ro-compact .ro-dots { display:none; }
+.ro-compact .ro-plate-area { left:50px; top:40px; width:300px; height:300px; }
+.ro-compact .ro-food { width:300px; height:300px; }
+.ro-compact .ro-placeholder { width:276px; height:276px; margin:12px; font-size:120px; }
+.ro-compact .ro-title-area { left:28px; top:352px; width:344px; height:160px; }
+.ro-compact .ro-actions { left:28px; top:522px; width:344px; flex-wrap:wrap; gap:10px; }
+.ro-compact .ro-primary,.ro-compact .ro-secondary { font-size:13px!important; padding:12px 16px; }
+.ro-compact .ro-bottom { left:22px; top:584px; }
+.ro-compact .ro-thumbs { width:260px; }
+.ro-compact .ro-thumb > button > span { font-size:11.5px; }
+.ro-compact .ro-info-box { left:24px; top:716px; width:352px; padding:18px; }
+.ro-compact .ro-info-label { font-size:11px; }
+.ro-compact .ro-info-area { height:150px; }
+.ro-compact .ro-info-item h3 { font-size:19px; }
+.ro-compact .ro-info-meta { font-size:12px; }
+.ro-compact .ro-info-item p { display:none; }
+.ro-compact .ro-info-link { font-size:12px!important; }
 `
 
 function splitName(name: string): [string, string] {
@@ -139,8 +163,13 @@ export default function RecipeOrbit({recipes,favorites,onFavorite,onView,ratings
     if(!root.current)return
     const el=root.current
     const resize=()=>{
-      // Scale in both directions: enlarge into the available space, never overflow it.
-      const scale=Math.max(.1,Math.min(el.clientWidth/1000,el.clientHeight/540))
+      // Phones use a tall layout that fills the screen width.
+      const compact=window.matchMedia('(max-width: 800px)').matches
+      el.classList.toggle('ro-compact',compact)
+      // Desktop: scale in both directions into the available space, never overflow it.
+      const scale=compact
+        ? Math.max(.1,el.clientWidth/400)
+        : Math.max(.1,Math.min(el.clientWidth/1000,el.clientHeight/540))
       el.style.setProperty('--ro-scale',String(scale))
     }
     resize()

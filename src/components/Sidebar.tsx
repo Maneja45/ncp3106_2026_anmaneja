@@ -1,4 +1,3 @@
-
 import { useState } from 'react'
 import {
   LayoutDashboard,
@@ -43,6 +42,7 @@ export default function Sidebar({
 
   return (
     <aside
+      className="sb-root"
       style={{
         width: collapsed ? 84 : 260,
         minWidth: collapsed ? 84 : 260,
@@ -56,8 +56,53 @@ export default function Sidebar({
           'width 0.3s ease, min-width 0.3s ease',
       }}
     >
+      {/* Phone layout: the sidebar becomes a bottom navigation bar */}
+      <style>{`
+        @media (max-width: 800px) {
+          body {
+            padding-bottom: calc(66px + env(safe-area-inset-bottom));
+          }
+          .sb-root {
+            position: fixed !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            top: auto !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
+            flex-direction: row !important;
+            border-right: none !important;
+            border-top: 1px solid var(--border) !important;
+            box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
+            z-index: 1000;
+          }
+          .sb-brand,
+          .sb-profile,
+          .sb-label {
+            display: none !important;
+          }
+          .sb-nav {
+            flex-direction: row !important;
+            gap: 2px !important;
+            width: 100%;
+            justify-content: space-between;
+          }
+          .sb-item {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            width: auto !important;
+            padding: 11px 0 !important;
+            justify-content: center !important;
+            transform: none !important;
+          }
+        }
+      `}</style>
+
       {/* Brand and collapse button */}
       <div
+        className="sb-brand"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -117,6 +162,7 @@ export default function Sidebar({
 
       {/* Navigation */}
       <nav
+        className="sb-nav"
         aria-label="Main navigation"
         style={{
           display: 'flex',
@@ -130,8 +176,10 @@ export default function Sidebar({
           return (
             <button
               key={label}
+              className="sb-item"
               type="button"
               title={collapsed ? label : undefined}
+              aria-label={label}
               aria-current={active ? 'page' : undefined}
               onClick={() => handleNavigate(label)}
               style={{
@@ -183,7 +231,9 @@ export default function Sidebar({
                 style={{ flexShrink: 0 }}
               />
 
-              {!collapsed && <span>{label}</span>}
+              {!collapsed && (
+                <span className="sb-label">{label}</span>
+              )}
             </button>
           )
         })}
@@ -191,6 +241,7 @@ export default function Sidebar({
 
       {/* User profile */}
       <button
+        className="sb-profile"
         type="button"
         onClick={() => handleNavigate('Settings')}
         title={collapsed ? 'My Account' : undefined}

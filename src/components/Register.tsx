@@ -675,6 +675,9 @@ export default function Register({
           }
           .register-form-side {
             padding: 35px 20px 45px;
+            max-height: none;
+            overflow-y: visible;
+            align-items: flex-start;
           }
         }
         @media (max-width: 400px) {

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Droplets,
   Flame,
+  Home,
   Info,
   Plus,
   RefreshCcw,
@@ -206,6 +207,34 @@ const DAILY_REFERENCE = {
   sodium: 2000,
 }
 
+// Scale (load cell) reading rules
+const SCALE_STABLE_MS = 1500 // reading must stay put this long
+const SCALE_STABLE_RANGE = 2 // grams of wobble still counted as stable
+const SCALE_MIN_PORTION = 1 // grams; less than this = nothing placed yet
+
+const roundTenth = (value: number): number =>
+  Math.round(value * 10) / 10
+
+// A food is "detected" when the lunchbox gets at least this much heavier
+const DETECT_MIN_GRAMS = 5
+
+// Homemade food: kitchen measures → grams / milligrams
+const SUGAR_UNITS = {
+  g: { label: 'g', grams: 1 },
+  tsp: { label: 'tsp sugar', grams: 4 }, // 1 tsp white sugar ≈ 4 g
+} as const
+
+const SODIUM_UNITS = {
+  mg: { label: 'mg sodium', mg: 1 },
+  salt: { label: 'tsp salt', mg: 2300 }, // 1 tsp table salt ≈ 2,300 mg sodium
+  soy: { label: 'tbsp toyo', mg: 900 }, // ≈, varies by brand
+  patis: { label: 'tbsp patis', mg: 1400 }, // ≈, varies by brand
+} as const
+
+type SugarUnit = keyof typeof SUGAR_UNITS
+type SodiumUnit = keyof typeof SODIUM_UNITS
+type FoodSource = 'catalog' | 'homemade'
+
 // Rough food capacity of each compartment (grams) — only used for the liquid fill level.
 // Adjust to the real size of your lunchbox.
 const COMPARTMENT_CAPACITY: Record<number, number> = {
@@ -392,6 +421,85 @@ export default function SmartLunchbox({
       ? `${liveWeight.toFixed(1)} g`
       : '-- g'
 
+  // ==========================================
+  // SCALE: TARE + AUTO PORTION WEIGHT
+  // The load cell weighs the whole lunchbox, so each new food is
+  // measured as (current weight − weight when the picker was opened).
+  // ==========================================
+
+  const [tareOffset, setTareOffset] = useState<number>(0)
+  const [scaleMode, setScaleMode] = useState<boolean>(false)
+  const [scaleStable, setScaleStable] = useState<boolean>(false)
+  // Weight the reading is settling around
+  const scaleAnchor = useRef<number | null>(null)
+  const stableTimer = useRef<number | undefined>(undefined)
+
+  useEffect(() => () => window.clearTimeout(stableTimer.current), [])
+
+  const netWeight =
+    hasValidWeight && liveWeight !== null
+      ? Math.max(0, roundTenth(liveWeight - tareOffset))
+      : null
+
+  // Stable = the weight stayed within ±2 g for 1.5 s.
+  // Time-based, because the app only re-renders when the weight changes.
+  useEffect(() => {
+    if (!hasValidWeight || liveWeight === null) {
+      window.clearTimeout(stableTimer.current)
+      scaleAnchor.current = null
+      setScaleStable(false)
+      return
+    }
+
+    const anchor = scaleAnchor.current
+
+    if (anchor !== null && Math.abs(liveWeight - anchor) <= SCALE_STABLE_RANGE) {
+      return // small wobble: keep the timer that is already running
+    }
+
+    // Moved more than ±2 g: start counting again
+    scaleAnchor.current = liveWeight
+    setScaleStable(false)
+    window.clearTimeout(stableTimer.current)
+    stableTimer.current = window.setTimeout(() => setScaleStable(true), SCALE_STABLE_MS)
+  }, [hasValidWeight, liveWeight])
+
+  // Lunchbox weight after the last saved food (what "empty" means right now)
+  const baselineRef = useRef<number | null>(null)
+  // Weight when the user closed a pop-up without saving (don't ask again for it)
+  const snoozeRef = useRef<number | null>(null)
+
+  const [detected, setDetected] = useState<boolean>(false)
+  const [source, setSource] = useState<FoodSource>('catalog')
+
+  // Homemade form
+  const [homeName, setHomeName] = useState<string>('')
+  const [homeSimilarId, setHomeSimilarId] = useState<string>('')
+  const [homeKcal, setHomeKcal] = useState<string>('')
+  const [homeSugar, setHomeSugar] = useState<string>('')
+  const [homeSugarUnit, setHomeSugarUnit] = useState<SugarUnit>('tsp')
+  const [homeSodium, setHomeSodium] = useState<string>('')
+  const [homeSodiumUnit, setHomeSodiumUnit] = useState<SodiumUnit>('salt')
+  const [homeServings, setHomeServings] = useState<string>('')
+
+  const resetHomemade = (): void => {
+    setHomeName('')
+    setHomeSimilarId('')
+    setHomeKcal('')
+    setHomeSugar('')
+    setHomeSugarUnit('tsp')
+    setHomeSodium('')
+    setHomeSodiumUnit('salt')
+    setHomeServings('')
+  }
+
+  const tareScale = (): void => {
+    if (!hasValidWeight || liveWeight === null) return
+    setTareOffset(liveWeight)
+    setScaleMode(true)
+    setPortionWeight(0)
+  }
+
   const sensorStatus = !deviceOnline
     ? 'Sensor disconnected'
     : !hasValidWeight
@@ -479,6 +587,36 @@ export default function SmartLunchbox({
       )
     : null
 
+  // Homemade: what the cook added, split by the number of servings
+  const homeSimilar = foods.find((food) => food.id === homeSimilarId) ?? null
+  const homeServingCount = Math.max(1, Number(homeServings) || 1)
+
+  const homemadeNutrition: Nutrition | null =
+    portionWeight > 0
+      ? {
+          calories: homeSimilar
+            ? (homeSimilar.calories * portionWeight) / 100
+            : Math.max(0, Number(homeKcal) || 0),
+          sugar:
+            (Math.max(0, Number(homeSugar) || 0) * SUGAR_UNITS[homeSugarUnit].grams) /
+            homeServingCount,
+          sodium:
+            (Math.max(0, Number(homeSodium) || 0) * SODIUM_UNITS[homeSodiumUnit].mg) /
+            homeServingCount,
+        }
+      : null
+
+  const summaryNutrition = source === 'homemade' ? homemadeNutrition : selectedNutrition
+
+  const canSave =
+    activeCompartment !== null &&
+    Number.isFinite(portionWeight) &&
+    portionWeight > 0 &&
+    !(scaleMode && portionWeight < SCALE_MIN_PORTION) &&
+    (source === 'homemade'
+      ? homeName.trim() !== '' && (homemadeNutrition?.calories ?? 0) > 0
+      : selectedFood !== null)
+
   // ==========================================
   // EFFECTS
   // ==========================================
@@ -506,6 +644,48 @@ export default function SmartLunchbox({
     }
   }, [])
 
+  // Watch the scale while no pop-up is open: new weight → ask what food it is
+  useEffect(() => {
+    if (activeCompartment !== null) return
+    if (!hasValidWeight || liveWeight === null || !scaleStable) return
+
+    const baseline = baselineRef.current
+
+    if (baseline === null) {
+      baselineRef.current = liveWeight // first steady reading = starting point
+      return
+    }
+
+    if (liveWeight < baseline - DETECT_MIN_GRAMS) {
+      baselineRef.current = liveWeight // food was taken out / eaten
+      snoozeRef.current = null
+      return
+    }
+
+    if (snoozeRef.current !== null) {
+      if (Math.abs(liveWeight - snoozeRef.current) < DETECT_MIN_GRAMS) return
+      snoozeRef.current = null
+    }
+
+    if (liveWeight - baseline >= DETECT_MIN_GRAMS) {
+      openDetected(baseline)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompartment, hasValidWeight, liveWeight, scaleStable])
+
+  // While weighing, the portion follows the scale
+  useEffect(() => {
+    if (activeCompartment === null || !scaleMode) return
+
+    if (netWeight === null) {
+      // Sensor dropped → keep the last value and switch to typing
+      setScaleMode(false)
+      return
+    }
+
+    setPortionWeight(netWeight)
+  }, [activeCompartment, scaleMode, netWeight])
+
   useEffect(() => {
     if (!notification) return
 
@@ -522,6 +702,21 @@ export default function SmartLunchbox({
   // ACTIONS
   // ==========================================
 
+  const firstEmptyCompartment = (): number =>
+    compartments.find((item) => !item.food)?.id ?? selectedCompartment
+
+  // Pop-up opened by the scale (food was placed in the lunchbox)
+  const openDetected = (baseline: number): void => {
+    setActiveCompartment(firstEmptyCompartment())
+    setSelectedFood(null)
+    setSearch('')
+    setSource('catalog')
+    resetHomemade()
+    setTareOffset(baseline)
+    setScaleMode(true)
+    setDetected(true)
+  }
+
   const openPicker = (id: number): void => {
     const compartment = compartments.find(
       (item) => item.id === id
@@ -529,8 +724,32 @@ export default function SmartLunchbox({
 
     setActiveCompartment(id)
     setSelectedFood(compartment?.food ?? null)
-    setPortionWeight(compartment?.weight || 150)
     setSearch('')
+    setDetected(false)
+    resetHomemade()
+
+    const isHomemade = compartment?.food?.category === 'Homemade'
+    setSource(isHomemade ? 'homemade' : 'catalog')
+
+    // Editing a homemade food: show its saved totals for this portion
+    if (compartment?.food && isHomemade) {
+      const portion = calculateNutrition(compartment.food, compartment.weight)
+      setHomeName(compartment.food.name)
+      setHomeKcal(String(Math.round(portion.calories)))
+      setHomeSugarUnit('g')
+      setHomeSugar(String(roundTenth(portion.sugar)))
+      setHomeSodiumUnit('mg')
+      setHomeSodium(String(Math.round(portion.sodium)))
+    }
+
+    // Empty compartment + scale ready → weigh what was added since the last saved food
+    if (!compartment?.food && hasValidWeight && liveWeight !== null) {
+      setTareOffset(baselineRef.current ?? liveWeight)
+      setScaleMode(true)
+    } else {
+      setScaleMode(false)
+      setPortionWeight(compartment?.weight || 150)
+    }
   }
 
   // Tap a compartment: show it in the Selected tile; empty ones open the picker right away.
@@ -545,12 +764,22 @@ export default function SmartLunchbox({
   }
 
   const closePicker = (): void => {
+    // Closed without saving → don't pop up again for this same weight
+    if (hasValidWeight && liveWeight !== null) {
+      snoozeRef.current = liveWeight
+    }
+    setDetected(false)
     setActiveCompartment(null)
     setSelectedFood(null)
     setSearch('')
   }
 
   const saveFood = (): void => {
+    if (source === 'homemade') {
+      saveHomemade()
+      return
+    }
+
     if (
       activeCompartment === null ||
       !selectedFood ||
@@ -563,6 +792,13 @@ export default function SmartLunchbox({
     const id = activeCompartment
     const food = selectedFood
     const weight = portionWeight
+
+    // The lunchbox's new "empty" weight includes this food
+    if (hasValidWeight && liveWeight !== null) {
+      baselineRef.current = liveWeight
+    }
+    snoozeRef.current = null
+    setDetected(false)
 
     setCompartments((previous) =>
       previous.map((compartment) =>
@@ -582,6 +818,54 @@ export default function SmartLunchbox({
     setNotification(
       `Food saved to Compartment ${id}.`
     )
+  }
+
+  const saveHomemade = (): void => {
+    const name = homeName.trim()
+
+    if (
+      activeCompartment === null ||
+      !name ||
+      !homemadeNutrition ||
+      homemadeNutrition.calories <= 0 ||
+      !Number.isFinite(portionWeight) ||
+      portionWeight <= 0
+    ) {
+      return
+    }
+
+    const id = activeCompartment
+    const weight = portionWeight
+    const per100 = 100 / weight
+
+    // Stored the same way as catalog foods: values per 100 g
+    const food: Food = {
+      id: `homemade-${Date.now()}`,
+      name,
+      category: 'Homemade',
+      emoji: '🏠',
+      calories: roundTenth(homemadeNutrition.calories * per100),
+      sugar: roundTenth(homemadeNutrition.sugar * per100),
+      sodium: roundTenth(homemadeNutrition.sodium * per100),
+    }
+
+    if (hasValidWeight && liveWeight !== null) {
+      baselineRef.current = liveWeight
+    }
+    snoozeRef.current = null
+
+    setCompartments((previous) =>
+      previous.map((compartment) =>
+        compartment.id === id ? { ...compartment, food, weight } : compartment
+      )
+    )
+
+    setDetected(false)
+    setActiveCompartment(null)
+    setSelectedFood(null)
+    setSearch('')
+    setSelectedCompartment(id)
+    setNotification(`${name} saved to Compartment ${id}.`)
   }
 
   const clearCompartment = (
@@ -1836,8 +2120,8 @@ export default function SmartLunchbox({
 
         .smart-modal {
           width: 100%;
-          max-width: 560px;
-          max-height: 90dvh;
+          max-width: 600px;
+          max-height: 92dvh;
 
           overflow-y: auto;
 
@@ -1905,6 +2189,222 @@ export default function SmartLunchbox({
           color: var(--sb-green);
         }
 
+        .smart-choice-group {
+          display: grid;
+          gap: 6px;
+          margin-bottom: 12px;
+        }
+
+        .smart-choice-label,
+        .smart-field > span {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--sb-muted);
+          letter-spacing: 0.02em;
+        }
+
+        .smart-choice-warning {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          margin: 0;
+          font-size: 11px;
+          color: var(--sb-mid);
+        }
+
+        .smart-segment {
+          display: grid;
+          gap: 4px;
+          padding: 4px;
+          border-radius: 14px;
+          background: var(--sb-track);
+        }
+
+        .smart-segment-2 {
+          grid-template-columns: 1fr 1fr;
+          margin-bottom: 12px;
+        }
+
+        .smart-segment-3 {
+          grid-template-columns: repeat(3, 1fr);
+        }
+
+        .smart-segment button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          min-width: 0;
+          padding: 8px 10px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--sb-muted);
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .smart-segment-3 button {
+          flex-direction: column;
+          gap: 1px;
+        }
+
+        .smart-segment-3 button strong {
+          font-size: 14px;
+        }
+
+        .smart-segment-3 button span {
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 10px;
+          font-weight: 500;
+        }
+
+        .smart-segment button:hover {
+          color: var(--sb-text);
+        }
+
+        .smart-segment button.active {
+          background: var(--sb-surface);
+          color: var(--sb-green);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .smart-segment button:focus-visible,
+        .smart-field input:focus-visible,
+        .smart-field select:focus-visible {
+          outline: 2px solid var(--sb-accent);
+          outline-offset: 1px;
+        }
+
+        .smart-home-form {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px 12px;
+        }
+
+        .smart-field {
+          display: grid;
+          gap: 5px;
+          min-width: 0;
+        }
+
+        .smart-field-wide {
+          grid-column: 1 / -1;
+          margin: 0;
+        }
+
+        .smart-home-note {
+          align-self: end;
+          margin: 0;
+          font-size: 10.5px;
+          line-height: 1.4;
+        }
+
+        .smart-field input,
+        .smart-field select {
+          width: 100%;
+          min-width: 0;
+          padding: 9px 10px;
+          border: 1px solid var(--sb-border);
+          border-radius: 10px;
+          background: var(--sb-surface);
+          color: var(--sb-text);
+          font: inherit;
+          font-size: 12px;
+        }
+
+        .smart-field-unit {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .smart-field-unit input {
+          flex: 1;
+        }
+
+        .smart-field-unit select {
+          width: auto;
+          flex: 0 0 auto;
+        }
+
+        .smart-field-unit em {
+          font-style: normal;
+          font-size: 11px;
+          color: var(--sb-muted);
+          white-space: nowrap;
+        }
+
+        .smart-scale-panel {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border: 1px solid var(--sb-border);
+          border-radius: 16px;
+          background: var(--sb-soft);
+          margin-bottom: 12px;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .smart-scale-panel.weighing {
+          border-color: var(--sb-accent);
+          box-shadow: 0 0 0 3px var(--sb-glow);
+        }
+
+        .smart-scale-info {
+          flex: 1;
+          min-width: 0;
+          display: grid;
+          gap: 3px;
+          justify-items: start;
+        }
+
+        .smart-scale-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 700;
+          background: var(--sb-track);
+          color: var(--sb-mid);
+        }
+
+        .smart-scale-badge.stable {
+          color: var(--sb-ok);
+        }
+
+        .smart-scale-side {
+          display: grid;
+          gap: 6px;
+          justify-items: end;
+        }
+
+        .smart-scale-value {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .smart-scale-panel.weighing .smart-weight-input {
+          font-weight: 700;
+          color: var(--sb-green);
+        }
+
+        .smart-scale-button {
+          padding: 5px 10px;
+          font-size: 11px;
+          gap: 5px;
+        }
+
         .smart-portion-input {
           margin-bottom: 13px;
           padding: 12px;
@@ -1968,7 +2468,7 @@ export default function SmartLunchbox({
 
           gap: 6px;
 
-          max-height: 240px;
+          max-height: 200px;
           overflow-y: auto;
 
           padding: 2px;
@@ -3164,6 +3664,138 @@ export default function SmartLunchbox({
           }
         }
 
+
+        /* ====================================
+           PHONE FIXES
+           (bottom navigation bar + small screens)
+        ==================================== */
+
+        @media (max-width: 600px) {
+
+          .smart-header {
+            gap: 10px;
+          }
+
+          .smart-header > div:first-child {
+            width: 100%;
+          }
+
+          .smart-header-actions {
+            width: 100%;
+            justify-content: space-between;
+          }
+
+          .smart-save-meal {
+            flex: 1;
+            justify-content: center;
+            padding: 10px 12px;
+            font-size: 11px;
+          }
+
+          /* Calories tile: ring on the left, numbers on the right */
+          .smart-hero-tile {
+            flex-direction: row;
+            align-items: center;
+          }
+
+          .smart-hero-body {
+            width: 100%;
+          }
+
+          /* Food picker pop-up */
+          .smart-modal-backdrop {
+            z-index: 1200;
+            padding: 8px;
+          }
+
+          .smart-modal {
+            padding: 16px;
+            max-height: 94dvh;
+          }
+
+          .smart-modal-title {
+            font-size: 20px;
+          }
+
+          .smart-scale-panel {
+            flex-wrap: wrap;
+          }
+
+          .smart-scale-info {
+            flex: 1 1 140px;
+          }
+
+          .smart-scale-side {
+            flex: 1 1 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+
+          .smart-weight-input {
+            width: 90px;
+          }
+
+          .smart-home-form {
+            grid-template-columns: 1fr;
+          }
+
+          /* 16px stops the phone from zooming in when typing */
+          .smart-field input,
+          .smart-field select,
+          .smart-search-input,
+          .smart-weight-input {
+            font-size: 16px;
+          }
+
+          .smart-food-list {
+            max-height: 160px;
+          }
+
+          .smart-food-option > .smart-muted {
+            max-width: 72px;
+            font-size: 10px;
+            text-align: right;
+          }
+
+          .smart-selected-stats {
+            gap: 6px;
+          }
+
+          .smart-modal-footer .smart-button {
+            flex: 1;
+            padding: 11px 12px;
+          }
+
+          /* Selected compartment card: don't let the grid squash it */
+          .smart-page .smart-layout .smart-right-column > .smart-selected-tile {
+            min-height: auto;
+            overflow: visible;
+          }
+
+          .smart-selected-body {
+            flex: 0 0 auto;
+          }
+
+          .smart-selected-empty {
+            min-height: 130px;
+            padding: 16px 12px;
+          }
+
+          .smart-selected-actions {
+            margin-top: 2px;
+          }
+
+          /* Keep the message above the bottom navigation bar */
+          .smart-toast {
+            left: 16px;
+            right: 16px;
+            bottom: calc(78px + env(safe-area-inset-bottom));
+            justify-content: center;
+            z-index: 1300;
+          }
+        }
+
       `}</style>
 
       {/* ====================================
@@ -3443,7 +4075,7 @@ export default function SmartLunchbox({
 
             <span>
               Select a compartment to manage its food.
-              Portion weights are entered separately.
+              BiteWise weighs each new food automatically.
             </span>
           </div>
 
@@ -3821,16 +4453,19 @@ export default function SmartLunchbox({
               <div className="smart-modal-header">
                 <div>
                   <p className="smart-modal-label">
-                    COMPARTMENT {activeCompartment}
+                    {detected ? 'FOOD DETECTED' : `COMPARTMENT ${activeCompartment}`}
                   </p>
 
                   <h3 className="smart-modal-title">
-                    Select Your Food
+                    {detected
+                      ? `${formatNumber(portionWeight, 1)} g added`
+                      : 'Select Your Food'}
                   </h3>
 
                   <p className="smart-muted">
-                    Choose a food and enter
-                    its portion weight.
+                    {detected
+                      ? 'Pick the compartment, then tell us what food this is.'
+                      : 'Choose a food and enter its portion weight.'}
                   </p>
                 </div>
 
@@ -3844,94 +4479,138 @@ export default function SmartLunchbox({
                 </button>
               </div>
 
-              {/* ACTUAL LIVE DEVICE WEIGHT */}
+              {/* SCALE / PORTION WEIGHT */}
 
-              <div className="smart-sensor-preview">
+              <div className={`smart-scale-panel ${scaleMode ? 'weighing' : ''}`}>
                 <div className="smart-sensor-icon">
                   <Scale size={21} />
                 </div>
 
-                <div style={{ flex: 1 }}>
-                  <strong
-                    style={{
-                      fontSize: 12,
-                    }}
-                  >
-                    Live Scale Weight
+                <div className="smart-scale-info">
+                  <strong style={{ fontSize: 12 }}>
+                    {scaleMode ? 'Weighing with BiteWise' : 'Portion Weight'}
                   </strong>
 
                   <p className="smart-muted">
-                    Total weight measured by BiteWise.
+                    {scaleMode
+                      ? portionWeight < SCALE_MIN_PORTION
+                        ? 'Place the food in this compartment.'
+                        : scaleStable
+                          ? 'Reading is stable — ready to save.'
+                          : 'Hold still… reading is settling.'
+                      : hasValidWeight
+                        ? 'Typed by hand. Tap Weigh to use the scale.'
+                        : 'Scale offline — enter the weight of this food.'}
                   </p>
+
+                  {scaleMode && (
+                    <span
+                      className={`smart-scale-badge ${
+                        portionWeight >= SCALE_MIN_PORTION && scaleStable ? 'stable' : ''
+                      }`}
+                    >
+                      {portionWeight >= SCALE_MIN_PORTION && scaleStable ? (
+                        <CheckCircle2 size={11} />
+                      ) : (
+                        <Info size={11} />
+                      )}
+                      {portionWeight >= SCALE_MIN_PORTION && scaleStable ? 'Stable' : 'Measuring'}
+                    </span>
+                  )}
                 </div>
 
-                <strong
-                  style={{
-                    fontSize: 19,
-                    color: 'var(--sb-green)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {displayedWeight}
-                </strong>
-              </div>
-
-              {/* INDIVIDUAL PORTION WEIGHT */}
-
-              <div className="smart-portion-input">
-                <div className="smart-portion-heading">
-                  <div>
-                    <strong
-                      style={{
-                        fontSize: 12,
-                      }}
-                    >
-                      Portion Weight
-                    </strong>
-
-                    <p className="smart-muted">
-                      Enter the weight of this food only.
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                    }}
-                  >
+                <div className="smart-scale-side">
+                  <div className="smart-scale-value">
                     <input
                       className="smart-weight-input"
                       type="number"
                       min={0}
                       step={0.1}
                       value={portionWeight}
+                      readOnly={scaleMode}
                       aria-label="Portion weight in grams"
                       onChange={(event) =>
                         setPortionWeight(
-                          Math.max(
-                            0,
-                            Number(
-                              event.target.value
-                            ) || 0
-                          )
+                          Math.max(0, Number(event.target.value) || 0)
                         )
                       }
+                      onFocus={() => {
+                        // Typing by hand turns the scale off
+                        if (scaleMode) setScaleMode(false)
+                      }}
                     />
-
-                    <span className="smart-muted">
-                      g
-                    </span>
+                    <span className="smart-muted">g</span>
                   </div>
-                </div>
 
-                <p className="smart-muted">
-                  The load cell measures total weight,
-                  not individual compartments.
-                </p>
+                  <button
+                    type="button"
+                    className="smart-button smart-scale-button"
+                    disabled={!hasValidWeight}
+                    onClick={tareScale}
+                    title="Set the current weight as zero, then add the food"
+                  >
+                    <RefreshCcw size={13} />
+                    {scaleMode ? 'Tare' : 'Weigh'}
+                  </button>
+                </div>
               </div>
 
+              {/* WHICH COMPARTMENT */}
+
+              <div className="smart-choice-group">
+                <span className="smart-choice-label">Compartment</span>
+                <div className="smart-segment smart-segment-3" role="radiogroup" aria-label="Compartment">
+                  {compartments.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={activeCompartment === item.id}
+                      className={activeCompartment === item.id ? 'active' : ''}
+                      onClick={() => setActiveCompartment(item.id)}
+                    >
+                      <strong>{item.id}</strong>
+                      <span>
+                        {item.food ? `${item.food.emoji} ${item.food.name}` : 'Empty'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {compartments.find((item) => item.id === activeCompartment)?.food && (
+                  <p className="smart-choice-warning">
+                    <Info size={12} />
+                    This compartment already has food — saving will replace it.
+                  </p>
+                )}
+              </div>
+
+              {/* WHERE THE FOOD CAME FROM */}
+
+              <div className="smart-segment smart-segment-2" role="tablist" aria-label="Food source">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={source === 'catalog'}
+                  className={source === 'catalog' ? 'active' : ''}
+                  onClick={() => setSource('catalog')}
+                >
+                  <UtensilsCrossed size={14} />
+                  SustansyaBox foods
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={source === 'homemade'}
+                  className={source === 'homemade' ? 'active' : ''}
+                  onClick={() => setSource('homemade')}
+                >
+                  <Home size={14} />
+                  Homemade
+                </button>
+              </div>
+
+              {source === 'catalog' ? (
+                <>
               {/* FOOD SEARCH */}
 
               <div className="smart-search-box">
@@ -4029,18 +4708,138 @@ export default function SmartLunchbox({
 
               </div>
 
+                </>
+              ) : (
+                <div className="smart-home-form">
+                  <label className="smart-field smart-field-wide">
+                    <span>Dish name</span>
+                    <input
+                      type="text"
+                      maxLength={80}
+                      placeholder="e.g. Lola's pork adobo"
+                      value={homeName}
+                      onChange={(event) => setHomeName(event.target.value)}
+                    />
+                  </label>
+
+                  <label className="smart-field">
+                    <span>Calories — closest dish</span>
+                    <select
+                      value={homeSimilarId}
+                      onChange={(event) => setHomeSimilarId(event.target.value)}
+                    >
+                      <option value="">I'll type the kcal</option>
+                      {foods.map((food) => (
+                        <option key={food.id} value={food.id}>
+                          {food.emoji} {food.name} ({food.calories} kcal/100 g)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="smart-field">
+                    <span>Calories for this portion</span>
+                    <div className="smart-field-unit">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        placeholder="0"
+                        value={
+                          homeSimilar && homemadeNutrition
+                            ? Math.round(homemadeNutrition.calories)
+                            : homeKcal
+                        }
+                        onChange={(event) => {
+                          setHomeSimilarId('')
+                          setHomeKcal(event.target.value)
+                        }}
+                      />
+                      <em>kcal</em>
+                    </div>
+                  </label>
+
+                  <label className="smart-field">
+                    <span>Sugar you added</span>
+                    <div className="smart-field-unit">
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        placeholder="0"
+                        value={homeSugar}
+                        onChange={(event) => setHomeSugar(event.target.value)}
+                      />
+                      <select
+                        aria-label="Sugar unit"
+                        value={homeSugarUnit}
+                        onChange={(event) => setHomeSugarUnit(event.target.value as SugarUnit)}
+                      >
+                        {(Object.keys(SUGAR_UNITS) as SugarUnit[]).map((unit) => (
+                          <option key={unit} value={unit}>{SUGAR_UNITS[unit].label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+
+                  <label className="smart-field">
+                    <span>Salt / sodium you added</span>
+                    <div className="smart-field-unit">
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        placeholder="0"
+                        value={homeSodium}
+                        onChange={(event) => setHomeSodium(event.target.value)}
+                      />
+                      <select
+                        aria-label="Sodium unit"
+                        value={homeSodiumUnit}
+                        onChange={(event) => setHomeSodiumUnit(event.target.value as SodiumUnit)}
+                      >
+                        {(Object.keys(SODIUM_UNITS) as SodiumUnit[]).map((unit) => (
+                          <option key={unit} value={unit}>{SODIUM_UNITS[unit].label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+
+                  <label className="smart-field">
+                    <span>Whole recipe makes</span>
+                    <div className="smart-field-unit">
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="1"
+                        value={homeServings}
+                        onChange={(event) => setHomeServings(event.target.value)}
+                      />
+                      <em>{homeServingCount === 1 ? 'serving' : 'servings'}</em>
+                    </div>
+                  </label>
+
+                  <p className="smart-muted smart-home-note">
+                    Put the sugar and salt that went into the whole pot — we divide it by the servings.
+                    Toyo and patis are estimates and vary by brand.
+                  </p>
+                </div>
+              )}
+
               {/* SELECTED FOOD SUMMARY */}
 
-              {selectedFood && selectedNutrition && (
+              {summaryNutrition &&
+                (source === 'homemade' ? homeName.trim() !== '' : selectedFood !== null) && (
                 <div className="smart-selected-summary">
-
                   <strong
                     style={{
                       fontSize: 13,
                     }}
                   >
-                    {selectedFood.emoji}{' '}
-                    {selectedFood.name}
+                    {source === 'homemade'
+                      ? `🏠 ${homeName.trim()}`
+                      : `${selectedFood?.emoji} ${selectedFood?.name}`}
                   </strong>
 
                   <p className="smart-muted">
@@ -4056,7 +4855,7 @@ export default function SmartLunchbox({
 
                       <strong>
                         {formatNumber(
-                          selectedNutrition.calories
+                          summaryNutrition.calories
                         )} kcal
                       </strong>
                     </div>
@@ -4068,7 +4867,7 @@ export default function SmartLunchbox({
 
                       <strong>
                         {formatNumber(
-                          selectedNutrition.sugar,
+                          summaryNutrition.sugar,
                           1
                         )} g
                       </strong>
@@ -4081,7 +4880,7 @@ export default function SmartLunchbox({
 
                       <strong>
                         {formatNumber(
-                          selectedNutrition.sodium
+                          summaryNutrition.sodium
                         )} mg
                       </strong>
                     </div>
@@ -4106,11 +4905,7 @@ export default function SmartLunchbox({
                     smart-button
                     smart-button-primary
                   "
-                  disabled={
-                    !selectedFood ||
-                    !Number.isFinite(portionWeight) ||
-                    portionWeight <= 0
-                  }
+                  disabled={!canSave}
                   onClick={saveFood}
                 >
                   <Check size={15} />

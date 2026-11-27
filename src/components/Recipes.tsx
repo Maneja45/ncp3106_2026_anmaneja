@@ -1259,6 +1259,31 @@ export default function Recipes() {
             .rc-three { grid-template-columns: 1fr 1fr; }
           }
 
+          /* ===== PHONE: page scrolls, orbit uses the tall layout ===== */
+          @media (max-width: 800px) {
+            .rc-page { height: auto; overflow: visible; }
+            .rc-stage { flex: 0 0 auto; overflow: visible; }
+            .rc-header .rc-btn { width: 100%; }
+            .rc-search { flex: 1 1 100%; max-width: none; }
+            .rc-pills {
+              flex-wrap: nowrap;
+              width: 100%;
+              overflow-x: auto;
+              padding-bottom: 4px;
+              scrollbar-width: none;
+            }
+            .rc-pills::-webkit-scrollbar { display: none; }
+            .rc-pill { flex-shrink: 0; white-space: nowrap; }
+            .rc-overlay { z-index: 1200; padding: 8px; }
+            .rc-dialog-main { padding: 18px 16px; }
+            .rc-form { padding: 18px 16px; }
+            .rc-two { grid-template-columns: 1fr; }
+            .rc-search input,
+            .rc-field input,
+            .rc-field select,
+            .rc-field textarea { font-size: 16px; }
+          }
+
           @media (prefers-reduced-motion: reduce) {
             .rc-page *,
             .rc-page *::before,
@@ -1488,7 +1513,7 @@ export default function Recipes() {
             <motion.div
               key="form"
               className="rc-overlay"
-              style={{ zIndex: 1001 }}
+              style={{ zIndex: 1201 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
